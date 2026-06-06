@@ -21,6 +21,7 @@ class RouteRequest(BaseModel):
 
     @model_validator(mode="after")
     def _eta_non_decreasing(self) -> "RouteRequest":
+        """Reject routes whose waypoint ETAs aren't in chronological order."""
         etas = [wp.eta for wp in self.waypoints]
         for earlier, later in zip(etas, etas[1:]):
             if later < earlier:
