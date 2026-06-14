@@ -1,7 +1,11 @@
+Start the back end first then run this from the frontend dir:
 docker build -t my-react-app .
 docker run -p 3000:80 my-react-app
 http://localhost:3000
 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Needed sometimes if fails to run:
 docker build -t my-react-app .
 docker run --rm --name usnrl-weather-router-frontend -p 3000:80 my-react-app
 http://localhost:3000
