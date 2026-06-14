@@ -94,6 +94,38 @@ function App() {
         }
     }
 
+    const maxWind = weatherData.length
+        ? Math.max(...weatherData.map(wp => wp.wind_speed_mph ?? 0))
+        : "N/A";
+
+    const maxTemp = weatherData.length
+        ? Math.max(...weatherData.map(wp => wp.temperature_f ?? 0))
+        : "N/A";
+
+    const maxHumidity = weatherData.length
+        ? Math.max(...weatherData.map(wp => wp.humidity_pct ?? 0))
+        : "N/A";
+
+    const maxPrecip = weatherData.length
+        ? Math.max(...weatherData.map(wp => wp.precipitation_in ?? 0))
+        : "N/A";
+
+    const minWind = weatherData.length
+        ? Math.min(...weatherData.map(wp => wp.wind_speed_mph ?? 0))
+        : "N/A";
+
+    const minTemp = weatherData.length
+        ? Math.min(...weatherData.map(wp => wp.temperature_f ?? 0))
+        : "N/A";
+
+    const minHumidity = weatherData.length
+        ? Math.min(...weatherData.map(wp => wp.humidity_pct ?? 0))
+        : "N/A";
+
+    const minPrecip = weatherData.length
+        ? Math.min(...weatherData.map(wp => wp.precipitation_in ?? 0))
+        : "N/A";
+
     return (
         <div className="page">
             <h1>USNRL Weather Router</h1>
@@ -133,10 +165,6 @@ function App() {
                 </div>
             </div>
 
-            <button onClick={runForecast} disabled={loading}>
-                {loading ? "Loading..." : "Run Forecast"}
-            </button>
-
             {error && (
                 <pre style={{ color: "red", whiteSpace: "pre-wrap" }}>
           {error}
@@ -147,18 +175,20 @@ function App() {
                 <table border="1" cellPadding="8">
                     <thead>
                     <tr>
+                        <th>Waypoint #</th>
                         <th>ETA</th>
                         <th>Lat</th>
                         <th>Lon</th>
-                        <th>Temp °F</th>
-                        <th>Wind MPH</th>
-                        <th>Humidity %</th>
-                        <th>Precip In</th>
+                        <th>🌡 Temp °F</th>
+                        <th>💨 Wind MPH</th>
+                        <th>💧 Humidity %</th>
+                        <th>🌧 Precipitation</th>
                     </tr>
                     </thead>
                     <tbody>
                     {weatherData.map((wp, index) => (
                         <tr key={index}>
+                            <td>WP-{index + 1}</td>
                             <td>{wp.eta}</td>
                             <td>{wp.lat}</td>
                             <td>{wp.lon}</td>
@@ -171,73 +201,91 @@ function App() {
                     </tbody>
                 </table>
             )}
+
+
+
             {weatherData.length > 0 && (
-                <div className="card" style={{ marginTop: "20px" }}>
-                    <div className="card-header">
-                        <h2>Route Map</h2>
-                        <span className="badge">OpenStreetMap</span>
+                <div className="map-row">
+                    <div className="card">
+                        <div className="card-header">
+                            <h2>Route Map</h2>
+                            <span className="badge">OpenStreetMap</span>
+                        </div>
+
+                        <MapContainer
+                            center={[weatherData[0].lat, weatherData[0].lon]}
+                            zoom={6}
+                            style={{ height: "500px", width: "100%" }}
+                        >
+                            <TileLayer
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                attribution="&copy; OpenStreetMap contributors"
+                            />
+
+                            <Polyline
+                                positions={weatherData.map((wp) => [wp.lat, wp.lon])}
+                                color="#26c6da"
+                            />
+
+                            {weatherData.map((wp, index) => (
+                                <Marker
+                                    key={index}
+                                    position={[wp.lat, wp.lon]}
+                                    icon={createWaypointIcon(index + 1)}
+                                >
+                                    <Popup>
+                                        <strong>Waypoint {index + 1}</strong>
+                                        <br />
+                                        ETA: {wp.eta}
+                                        <br />
+                                        Temp: {wp.temperature_f} °F
+                                        <br />
+                                        Wind: {wp.wind_speed_mph} mph
+                                        <br />
+                                        Humidity: {wp.humidity_pct}%
+                                    </Popup>
+                                </Marker>
+                            ))}
+                        </MapContainer>
                     </div>
 
-                    <MapContainer
-                        center={[
-                            weatherData[0].lat,
-                            weatherData[0].lon
-                        ]}
-                        zoom={6}
-                        style={{
-                            height: "500px",
-                            width: "100%"
-                        }}
-                    >
-                        <TileLayer
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution="&copy; OpenStreetMap contributors"
-                        />
+                    <div className="card peak-card">
+                        <div className="card-header">
+                            <h2>Peak Values</h2>
+                        </div>
 
-                        <Polyline
-                            positions={weatherData.map((wp) => [
-                                wp.lat,
-                                wp.lon
-                            ])}
-                            color="#26c6da"
-                        />
+                        <div className="peak-grid">
+                            <div className="peak-cell">
+                                <div className="peak-label">💨 Wind</div>
+                                <div className="peak-value">{minWind} - {maxWind}</div>
+                                <div className="peak-sub">Min / Max mph</div>
+                            </div>
 
-                        {weatherData.map((wp, index) => (
-                            <Marker
-                                key={index}
-                                position={[wp.lat, wp.lon]}
-                                icon={createWaypointIcon(index + 1)}
-                            >
-                                <Popup>
-                                    <strong>
-                                        Waypoint {index + 1}
-                                    </strong>
+                            <div className="peak-cell">
+                                <div className="peak-label">🌡 Temperature</div>
+                                <div className="peak-value">{minTemp} - {maxTemp}</div>
+                                <div className="peak-sub">Min / Max °F</div>
+                            </div>
 
-                                    <br />
+                            <div className="peak-cell">
+                                <div className="peak-label">💧 Humidity</div>
+                                <div className="peak-value">{minHumidity} - {maxHumidity}</div>
+                                <div className="peak-sub">Min / Max %</div>
+                            </div>
 
-                                    ETA: {wp.eta}
-
-                                    <br />
-
-                                    Temp: {wp.temperature_f} °F
-
-                                    <br />
-
-                                    Wind: {wp.wind_speed_mph} mph
-
-                                    <br />
-
-                                    Humidity: {wp.humidity_pct}%
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </MapContainer>
+                            <div className="peak-cell">
+                                <div className="peak-label">🌧 Precipitation</div>
+                                <div className="peak-value">{minPrecip} - {maxPrecip}</div>
+                                <div className="peak-sub">Min / Max in</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
             {weatherData.length > 0 && (
                 <div className="card" style={{ marginTop: "20px" }}>
                     <div className="card-header">
-                        <h2>Forecast Discussion</h2>
+                        <h2>Weather Situation</h2>
                         <span className="badge muted">Editable</span>
                     </div>
 
@@ -255,8 +303,8 @@ function App() {
                             <button
                                 style={{ width: "auto", padding: "10px 24px" }}
                                 onClick={() => {
-                                    console.log("Updated forecast text:", forecastText);
-                                    alert("Forecast text updated.");
+                                    console.log("<WIP> Updated forecast text:", forecastText);
+                                    alert("<WIP> Forecast text updated.");
                                 }}
                             >
                                 Update
