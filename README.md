@@ -18,9 +18,9 @@ stubbed behind a frozen API contract so every lane can build in parallel.
 | Backend tests + CI | ✅ working | Joseph |
 | `summary` (AI forecast discussion) | ⏸️ stubbed `null` | Krithika |
 | `validation` (review-agent findings) | ⏸️ stubbed `[]` | Ryan |
-| Frontend map | ✅ Done | Reece |
-| Frontend table | ✅ Done | Reece |
-| Frontend table ranges | ⏸️ Needs improvement | Reece |
+| Frontend map | ✅ working | Reece |
+| Frontend table | ✅ working | Reece |
+| Frontend table ranges | ⏸️ needs improvement | Reece |
 | Frontend forecast box | ⏸️ placeholder | Reece |
 
 ## Quickstart
