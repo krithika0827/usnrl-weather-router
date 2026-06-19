@@ -303,11 +303,11 @@ function App() {
                             <button
                                 style={{ width: "auto", padding: "10px 24px" }}
                                 onClick={() => {
-                                    console.log("<WIP> Updated forecast text:", forecastText);
-                                    alert("<WIP> Forecast text updated.");
+                                    console.log("<WIP> Saved forecast text:", forecastText);
+                                    alert("<WIP> Forecast text saved.");
                                 }}
                             >
-                                Update
+                                Save
                             </button>
                         </div>
                     </div>

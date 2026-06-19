@@ -12,7 +12,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "3000:3000"
+      - "3000:80"
     volumes:
       - ./frontend:/app
     depends_on:
