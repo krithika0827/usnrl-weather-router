@@ -29,7 +29,6 @@ Runs the same on macOS and Windows via Docker Desktop:
 
 ```bash
 cp .env.example .env
-docker build -t my-react-app .
 docker-compose up --build        # Starts front and back end
 ```
 For front-end testing: navigate to http://localhost:3000/ to access the beta front end.
