@@ -18,7 +18,10 @@ stubbed behind a frozen API contract so every lane can build in parallel.
 | Backend tests + CI | ✅ working | Joseph |
 | `summary` (AI forecast discussion) | ⏸️ stubbed `null` | Krithika |
 | `validation` (review-agent findings) | ⏸️ stubbed `[]` | Ryan |
-| Frontend (map / table / forecast box) | ⏸️ skeleton | Reece |
+| Frontend map | ✅ Done | Reece |
+| Frontend table | ✅ Done | Reece |
+| Frontend table ranges | ⏸️ Needs improvement | Reece |
+| Frontend forecast box | ⏸️ placeholder | Reece |
 
 ## Quickstart
 
@@ -26,9 +29,18 @@ Runs the same on macOS and Windows via Docker Desktop:
 
 ```bash
 cp .env.example .env
-docker-compose up backend        # backend only; frontend is still a skeleton
+docker-compose up --build        # Starts front and back end
 ```
+For front-end testing: navigate to http://localhost:3000/ to access the beta front end.
 
+The following features are currently functional: User input, Weather table, Display value range, Map display.
+
+The AI-generated weather report currently contains placeholder text.
+
+----------------------------------------------------------------------------------------------------
+
+
+For backend testing:
 Then open **http://127.0.0.1:8000/docs** for interactive API docs — the easiest
 way to try `POST /api/v1/forecast`: click **Try it out**, paste a request body,
 and hit **Execute**.
