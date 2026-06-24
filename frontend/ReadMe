@@ -1,6 +1,0 @@
-Start the back end first then run this from the frontend dir:
-docker build -t my-react-app .
-
-
-docker-compose up --build
-http://localhost:3000

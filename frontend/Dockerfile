@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Copy the app (also bind-mounted in docker-compose.yml for live editing).
+# Copy the app.
 COPY . .
 RUN npm run build
 
@@ -17,7 +17,3 @@ FROM nginx:alpine
 COPY --from=build /app/build /usr/share/nginx/html
 
 EXPOSE 80
-
-# --host 0.0.0.0 makes the server reachable from outside the container.
-CMD ["nginx", "-g", "daemon off;"]
-
