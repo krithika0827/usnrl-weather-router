@@ -64,10 +64,12 @@ function App() {
     const [shipName, setShipName] = useState("Borealis");
     const [routeName, setRouteName] = useState("Kessel Run");
 
-    const { min: minTemp, max: maxTemp } = getMinMax("temperature_f");
-    const { min: minWind, max: maxWind } = getMinMax("wind_speed_mph");
-    const { min: minHumidity, max: maxHumidity } = getMinMax("humidity_pct");
-    const { min: minPrecip, max: maxPrecip } = getMinMax("precipitation_in");
+    const {min: minTemp, max: maxTemp} = getMinMax("temperature_f");
+    const {min: minWind, max: maxWind} = getMinMax("wind_speed_mph");
+    const {min: minHumidity, max: maxHumidity} = getMinMax("humidity_pct");
+    const {min: minPrecip, max: maxPrecip} = getMinMax("precipitation_in");
+
+    const travelDetails = getTravelDetails();
 
     /* Min max improved */
     function getMinMax(field) {
@@ -161,10 +163,61 @@ function App() {
         return min === max ? `${min}` : `${min} - ${max}`;
     };
 
+    function toRadians(degrees) {
+        return degrees * (Math.PI / 180);
+    }
+
+    function getDistanceMiles(lat1, lon1, lat2, lon2) {
+        const earthRadiusMiles = 3958.8;
+
+        const dLat = toRadians(lat2 - lat1);
+        const dLon = toRadians(lon2 - lon1);
+
+        const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRadians(lat1)) *
+            Math.cos(toRadians(lat2)) *
+            Math.sin(dLon / 2) ** 2;
+
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return earthRadiusMiles * c;
+    }
+
+    function getTravelDetails() {
+        if (weatherData.length < 2) {
+            return {
+                travelTime: "N/A",
+                travelDistance: "N/A"
+            };
+        }
+
+        const start = new Date(weatherData[0].eta);
+        const end = new Date(weatherData[weatherData.length - 1].eta);
+
+        const hours = Math.abs(end - start) / (1000 * 60 * 60);
+
+        let totalMiles = 0;
+
+        for (let i = 1; i < weatherData.length; i++) {
+            totalMiles += getDistanceMiles(
+                weatherData[i - 1].lat,
+                weatherData[i - 1].lon,
+                weatherData[i].lat,
+                weatherData[i].lon
+            );
+        }
+
+        return {
+            travelTime: `${hours.toFixed(1)} hrs`,
+            travelDistance: `${totalMiles.toFixed(1)} mi`
+        };
+    }
+
     return (
         <div className="page">
             <h1>USNRL Weather Router</h1>
-            <div className="card" style={{marginBottom: "20px"}}>
+            <div className="card">
                 <div className="card-header">
                     <h2>Inputs</h2>
                 </div>
@@ -339,7 +392,6 @@ function App() {
                         {/* Interactive Map */}
                         <div className="card-header">
                             <h2>Route Map</h2>
-                            <span className="badge">OpenStreetMap</span>
                         </div>
 
                         <MapContainer
@@ -381,47 +433,71 @@ function App() {
                         </MapContainer>
                     </div>
 
-                    {/* Peak Values Table */}
-                    <div className="card peak-card">
-                        <div className="card-header">
-                            <h2>Peak Values</h2>
+                    {/* Right side cards */}
+                    <div className="side-panel">
+                        {/* Peak Values Table */}
+                        <div className="card peak-card">
+                            <div className="card-header">
+                                <h2>Peak Values</h2>
+                            </div>
+
+                            <div className="peak-grid">
+                                <div className="peak-cell">
+                                    <div className="peak-label">🌡 Temperature</div>
+                                    <div className="peak-value">
+                                        {formatRange(minTemp, maxTemp)}
+                                    </div>
+                                    <div className="peak-sub">Min / Max °F</div>
+                                </div>
+                                <div className="peak-cell">
+                                    <div className="peak-label">💨 Wind</div>
+                                    <div className="peak-value">
+                                        {formatRange(minWind, maxWind)}
+                                    </div>
+                                    <div className="peak-sub">Min / Max mph</div>
+                                </div>
+                                <div className="peak-cell">
+                                    <div className="peak-label">💧 Humidity</div>
+                                    <div className="peak-value">
+                                        {formatRange(minHumidity, maxHumidity)}
+                                    </div>
+                                    <div className="peak-sub">Min / Max %</div>
+                                </div>
+                                <div className="peak-cell">
+                                    <div className="peak-label">🌧 Precipitation</div>
+                                    <div className="peak-value">
+                                        {formatRange(minPrecip, maxPrecip)}
+                                    </div>
+                                    <div className="peak-sub">Min / Max in</div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="peak-grid">
-                            <div className="peak-cell">
-                                <div className="peak-label">🌡 Temperature</div>
-                                <div className="peak-value">
-                                    {formatRange(minTemp, maxTemp)}
-                                </div>
-                                <div className="peak-sub">Min / Max °F</div>
+                        <div className="card travel-card">
+                            <div className="card-header">
+                                <h2>Travel Details (Estmated)</h2>
                             </div>
-                            <div className="peak-cell">
-                                <div className="peak-label">💨 Wind</div>
-                                <div className="peak-value">
-                                    {formatRange(minWind, maxWind)}
-                                </div>
-                                <div className="peak-sub">Min / Max mph</div>
-                            </div>
-                            <div className="peak-cell">
-                                <div className="peak-label">💧 Humidity</div>
-                                <div className="peak-value">
-                                    {formatRange(minHumidity, maxHumidity)}
-                                </div>
-                                <div className="peak-sub">Min / Max %</div>
-                            </div>
-                            <div className="peak-cell">
-                                <div className="peak-label">🌧 Precipitation</div>
-                                <div className="peak-value">
-                                    {formatRange(minPrecip, maxPrecip)}
-                                </div>
-                                <div className="peak-sub">Min / Max in</div>
-                            </div>
+
+                            <table border="1" cellPadding="8" style={{width: "100%"}}>
+                                <tbody>
+                                <tr>
+                                    <td><strong>Travel Time</strong></td>
+                                    <td>{travelDetails.travelTime}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Estimated Distance</strong></td>
+                                    <td>{travelDetails.travelDistance}</td>
+                                </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
+
+
                 </div>
             )}
             {weatherData.length > 0 && (
-                <div className="card" style={{marginTop: "20px"}}>
+                <div className="card">
                     <div className="card-header">
                         <h2>Weather Situation</h2>
                         <span className="badge muted">Editable</span>
