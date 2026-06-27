@@ -1,5 +1,8 @@
 # Shared agent state definitions — Owner: Ryan
-from typing import TypedDict, List, Optional
+
+from typing import List, Optional, TypedDict, Union
+
+from app.models.weather_data import WaypointForecast
 
 
 class ValidationFinding(TypedDict):
@@ -14,8 +17,8 @@ class ValidationFinding(TypedDict):
 
 
 class ValidationState(TypedDict):
-    # Stores the route weather data.
-    route: List[dict]
+    # Stores route points as Pydantic models or dictionaries.
+    route: List[Union[WaypointForecast, dict]]
 
     # Stores the AI summary text.
     summary: Optional[str]
