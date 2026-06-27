@@ -44,8 +44,9 @@ def test_forecast_happy_path_envelope(stub_weather):
     body = r.json()
     assert body["route"][0]["temperature_f"] == 70.0
     assert body["summary"] is None      # stubbed for Krithika (Week 4)
-    assert body["validation"] == []     # stubbed for Ryan (Week 5)
-
+    assert body["validation"][0]["severity"] == "warning"
+    assert body["validation"][0]["field"] == "summary"
+    assert "Summary is missing" in body["validation"][0]["message"]
 
 def test_rejects_latitude_out_of_range():
     """Latitude outside [-90, 90] is rejected with 422."""
