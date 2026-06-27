@@ -5,8 +5,10 @@ list of coordinates + ETAs; the app returns a per-waypoint weather table, an
 AI-generated forecast summary, and automated validation findings.
 
 This repo currently has a **working deterministic backend** (real weather, input
-validation, graceful degradation). The AI summary and validation agents are
-stubbed behind a frozen API contract so every lane can build in parallel.
+validation, graceful degradation). The AI summary is still stubbed behind the
+frozen API contract, while the validation workflow is now integrated and returns
+validation findings through the forecast endpoint.
+
 
 ## Status
 
@@ -17,7 +19,7 @@ stubbed behind a frozen API contract so every lane can build in parallel.
 | NOAA fallback + graceful degradation | ✅ working | Joseph |
 | Backend tests + CI | ✅ working | Joseph |
 | `summary` (AI forecast discussion) | ⏸️ stubbed `null` | Krithika |
-| `validation` (review-agent findings) | ⏸️ stubbed `[]` | Ryan |
+| `validation` (review-agent findings) | ✅ integrated | Ryan |
 | Frontend map | ✅ working | Reece |
 | Frontend table | ✅ working | Reece |
 | Frontend table ranges | ⏸️ needs improvement | Reece |
@@ -64,7 +66,8 @@ Full shapes and validation rules: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md)
 - **Input:** `{ "waypoints": [ { "lat", "lon", "eta" }, ... ] }` — `eta` is ISO-8601
   UTC, waypoints in chronological order (else `422`).
 - **Output:** `{ "route": [ {lat, lon, eta, temperature_f, wind_speed_mph,
-  precipitation_in, humidity_pct} ], "summary": null, "validation": [] }`.
+  precipitation_in, humidity_pct} ], "summary": null, "validation": [ {"severity",
+  "field", "message"]}`.
 
 The response **shape is final** — only the stubbed `summary`/`validation` get
 filled in later, so anything built against it now won't need rework.
@@ -114,6 +117,6 @@ tests/               test_api.py (endpoint), test_weather.py (service, mocked)
 ## Tests
 
 ```bash
-docker compose run --rm backend pytest -q    # 10 tests, fully mocked — no network
+docker compose run --rm backend pytest -q    # 18 tests, fully mocked — no network
 ```
 CI (`.github/workflows/test.yml`) runs the same suite on every push and PR.
