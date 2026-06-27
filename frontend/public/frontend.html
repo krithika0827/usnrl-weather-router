@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>USNRL Marine Weather Forecast — Output Mockup v3</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy:     #0a1628;
+      --navy-mid: #112244;
+      --navy-lt:  #1a3560;
+      --accent:   #1e8bc3;
+      --accent2:  #26c6da;
+      --gold:     #f9a825;
+      --text:     #e8edf5;
+      --text-dim: #8fa3be;
+      --border:   #1e3358;
+      --card:     #0f1f3d;
+      --card2:    #0d1a33;
+      --radius:   8px;
+      --shadow:   0 4px 20px rgba(0,0,0,0.5);
+    }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--navy); color: var(--text); min-height: 100vh; font-size: 14px; }
+
+    /* ── Header ── */
+    header {
+      background: var(--navy-mid); border-bottom: 2px solid var(--accent);
+      padding: 0 24px; display: flex; align-items: center; gap: 16px; height: 56px;
+      position: sticky; top: 0; z-index: 1000;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .logo-icon { width: 32px; height: 32px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .logo-sub { color: var(--text-dim); font-weight: 400; font-size: 12px; margin-left: 4px; }
+    header nav { margin-left: auto; display: flex; gap: 8px; }
+    header nav a { color: var(--text-dim); text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 4px; }
+    header nav a:hover { background: var(--navy-lt); color: var(--text); }
+
+    /* ── Page ── */
+    .page { max-width: 1400px; margin: 0 auto; padding: 24px 24px 60px; }
+
+    /* ── Mockup banner ── */
+    .mockup-banner {
+      background: linear-gradient(90deg, #1a0a4a, #0a2a4a); border: 1px solid #3d2a7a;
+      border-radius: 6px; padding: 9px 16px; margin-bottom: 22px;
+      display: flex; align-items: center; gap: 10px; font-size: 12px; color: #a78bfa;
+    }
+    .mockup-banner strong { color: #c4b5fd; }
+    .mockup-banner code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--accent2); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── Card ── */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .card-header { background: var(--card2); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .card-header h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .badge { font-size: 10px; background: var(--accent); color: #fff; border-radius: 4px; padding: 2px 7px; font-weight: 600; }
+    .badge.green { background: #2e7d32; }
+    .badge.muted { background: var(--navy-lt); color: var(--text-dim); }
+
+    /* ══════════════════════════════
+       STEP 1 — INPUT FORM
+    ══════════════════════════════ */
+    .form-grid { display: grid; grid-template-columns: 1fr 290px; gap: 16px; align-items: start; padding: 20px; }
+    @media (max-width: 800px) { .form-grid { grid-template-columns: 1fr; } }
+
+    .textarea-wrap { position: relative; }
+    textarea {
+      width: 100%; height: 210px;
+      background: #060f1e; color: #c8d8ee;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px; font-family: 'Courier New', monospace; font-size: 12.5px;
+      line-height: 1.6; resize: vertical; outline: none; transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: var(--accent); }
+    .count-pill {
+      position: absolute; top: 8px; right: 8px;
+      font-size: 10px; color: var(--text-dim); background: var(--card2);
+      padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); pointer-events: none;
+    }
+    .format-hint {
+      margin-top: 8px; font-size: 11px; color: var(--text-dim); line-height: 1.7;
+      padding: 10px 14px; background: var(--card2); border-radius: 6px;
+      border-left: 3px solid var(--accent);
+    }
+    .format-hint code { background: #0a1628; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: var(--accent2); }
+
+    .form-controls { display: flex; flex-direction: column; gap: 12px; }
+    .form-controls label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); display: block; margin-bottom: 4px; }
+    .form-controls select, .form-controls input[type="text"] {
+      width: 100%; background: #060f1e; color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13px; outline: none;
+    }
+    .form-controls select:focus, .form-controls input[type="text"]:focus { border-color: var(--accent); }
+    .form-controls select option { background: #0a1628; }
+
+    .btn-primary {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 6px; padding: 11px 20px; font-size: 14px; font-weight: 700;
+      cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover { background: #1679ab; }
+    .btn-primary:disabled { background: var(--navy-lt); color: var(--text-dim); cursor: not-allowed; }
+    .btn-secondary {
+      background: transparent; color: var(--text-dim); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 16px; font-size: 12px; cursor: pointer;
+      transition: all 0.15s; width: 100%; text-align: center;
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+
+    .val-bar { margin-top: 10px; padding: 9px 13px; border-radius: 6px; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+    .val-bar.ok   { background: #0f2b1a; border: 1px solid #2e7d32; color: #66bb6a; }
+    .val-bar.err  { background: #2b0a0a; border: 1px solid #c62828; color: #ef5350; }
+    .val-bar.info { background: var(--card2); border: 1px solid var(--border); color: var(--text-dim); }
+
+    /* ══════════════════════════════
+       PROGRESS
+    ══════════════════════════════ */
+    .progress-wrap { margin-bottom: 22px; padding: 16px 20px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); display: none; }
+    .progress-wrap.visible { display: block; }
+    .progress-steps { display: flex; }
+    .step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; }
+    .step:not(:last-child)::after { content: ''; position: absolute; top: 14px; left: 50%; width: 100%; height: 2px; background: var(--border); z-index: 0; }
+    .step.done::after   { background: var(--accent); }
+    .step.active::after { background: linear-gradient(90deg, var(--accent), var(--border)); }
+    .step-dot {
+      width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border);
+      background: var(--card2); display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--text-dim); z-index: 1; flex-shrink: 0;
+    }
+    .step.done  .step-dot  { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .step.active .step-dot { border-color: var(--accent); color: var(--accent); animation: pulse 1.2s infinite; }
+    @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(30,139,195,0.4)} 50%{box-shadow:0 0 0 6px rgba(30,139,195,0)} }
+    .step-label { font-size: 10px; color: var(--text-dim); text-align: center; line-height: 1.3; }
+    .step.done .step-label, .step.active .step-label { color: var(--text); }
+    .progress-foot { font-size: 11px; color: var(--text-dim); margin-top: 12px; text-align: right; }
+
+    /* ══════════════════════════════
+       OUTPUT
+    ══════════════════════════════ */
+    .output-area { display: none; }
+    .output-area.visible { display: block; }
+
+    /* Route summary bar */
+    .route-summary {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px 20px; display: flex; gap: 28px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .rs-item { display: flex; flex-direction: column; gap: 2px; }
+    .rs-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+    .rs-value { font-size: 15px; font-weight: 600; }
+    .rs-value.mono { font-family: monospace; font-size: 13px; }
+    .divider { width: 1px; height: 36px; background: var(--border); }
+
+    /* Map + sidebar */
+    .map-row { display: grid; grid-template-columns: 1fr 340px; gap: 20px; margin-bottom: 20px; }
+    @media (max-width: 1000px) { .map-row { grid-template-columns: 1fr; } }
+    #map { height: 360px; width: 100%; }
+    .map-legend { padding: 10px 16px; display: flex; gap: 16px; flex-wrap: wrap; border-top: 1px solid var(--border); }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    /* Sidebar: 4 big stat tiles */
+    .stat-sidebar { display: flex; flex-direction: column; }
+    .stat-grid-4 { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); flex: 1; }
+    .stat-cell { background: var(--card); padding: 16px 14px; }
+    .stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-dim); margin-bottom: 6px; }
+    .stat-val { font-size: 26px; font-weight: 700; line-height: 1; color: var(--text); }
+    .stat-unit { font-size: 12px; color: var(--text-dim); font-weight: 400; }
+    .stat-sub { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+    .stat-val.warn { color: var(--gold); }
+    .stat-val.rain { color: #4fc3f7; }
+
+    /* ══════════════════════════════
+       TRANSPOSED TABLE
+       Rows = 4 weather variables
+       Columns = waypoints
+    ══════════════════════════════ */
+    .table-scroll { overflow-x: auto; }
+    .wx-table { border-collapse: collapse; width: max-content; min-width: 100%; }
+
+    /* Sticky variable-name column */
+    .wx-table .row-hdr {
+      position: sticky; left: 0; z-index: 10;
+      background: var(--card2); border-right: 2px solid var(--border);
+    }
+
+    /* Column header (per waypoint) */
+    .wx-table thead th {
+      background: var(--card2); padding: 10px 18px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-dim);
+      border-bottom: 2px solid var(--border);
+      text-align: center; white-space: nowrap;
+    }
+    .wx-table thead th.row-hdr { text-align: left; min-width: 170px; }
+    .wp-col-head { min-width: 130px; }
+    .wp-num  { font-size: 15px; font-weight: 700; }
+    .wp-lat  { font-size: 9px; color: var(--text-dim); font-family: monospace; font-weight: 400; margin-top: 2px; }
+    .wp-time { font-size: 9px; color: var(--text-dim); font-weight: 400; }
+
+    /* Data rows */
+    .wx-table tbody tr   { border-bottom: 1px solid var(--border); }
+    .wx-table tbody tr:last-child { border-bottom: none; }
+    .wx-table tbody tr:hover td:not(.row-hdr) { background: rgba(30,139,195,0.07); }
+    .wx-table tbody tr:nth-child(even) td:not(.row-hdr) { background: rgba(255,255,255,0.025); }
+    .wx-table tbody tr:nth-child(even):hover td:not(.row-hdr) { background: rgba(30,139,195,0.07); }
+
+    .wx-table tbody td { padding: 12px 18px; text-align: center; vertical-align: middle; white-space: nowrap; }
+    .wx-table tbody td.row-hdr {
+      text-align: left; padding: 12px 14px;
+      font-size: 12px; font-weight: 600; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.4;
+    }
+    .row-icon { font-size: 15px; margin-right: 7px; }
+    .row-sub  { font-size: 10px; font-weight: 400; text-transform: none; letter-spacing: 0; color: #6a85a8; display: block; margin-top: 2px; padding-left: 22px; }
+
+    /* Cell styles */
+    .cell-warn  { color: var(--gold); font-weight: 700; font-size: 16px; }
+    .cell-dim   { color: var(--text-dim); }
+    .cell-rain  { color: #4fc3f7; font-weight: 600; }
+    .cell-ok    { color: var(--text); font-size: 16px; font-weight: 600; }
+
+    /* Wind cell: speed + direction arrow stacked */
+    .wind-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .wind-speed { font-size: 16px; font-weight: 700; }
+    .wind-glyph { font-size: 18px; line-height: 1; }
+    .wind-dir-lbl { font-size: 9px; color: var(--text-dim); }
+
+    /* Temp heatmap (cool → warm) */
+    .temp-60 { color: #64b5f6; }
+    .temp-63 { color: #81c784; }
+    .temp-66 { color: #aed581; }
+    .temp-69 { color: var(--gold); }
+
+    /* Humidity bar */
+    .hum-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .hum-val  { font-size: 15px; font-weight: 600; }
+    .hum-bar-bg { width: 48px; height: 4px; background: var(--border); border-radius: 2px; }
+    .hum-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); }
+
+    /* Precip cell */
+    .precip-yes { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .precip-icon { font-size: 18px; }
+    .precip-lbl  { font-size: 9px; color: #4fc3f7; }
+
+    /* stub narrative banner */
+    .stub-banner {
+      margin: 0; padding: 14px 20px;
+      background: #1a1400; border-top: 1px solid #4a3800;
+      display: flex; align-items: center; gap: 12px; font-size: 13px; color: #c8a000;
+    }
+    .stub-banner strong { color: var(--gold); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚓</div>
+    USNRL <span class="logo-sub">/ Marine Weather Forecast System</span>
+  </div>
+  <nav>
+    <a href="#">New Forecast</a>
+    <a href="#">Run History</a>
+    <a href="#">API Docs</a>
+  </nav>
+</header>
+
+<div class="page">
+
+  <div class="mockup-banner">
+    <span>🎨</span>
+    <div>
+      <strong>Mockup v3 — Phase 1 Prototype</strong> &nbsp;·&nbsp;
+      Table shows only the four fields specified for the initial build:
+      <strong style="color:#c4b5fd;">Temperature · Wind Speed · Humidity · Precipitation</strong>
+      (T3.1 + T6.3 + Week 3 exit criteria). Wave height, gust, sea state deferred to later phases.
+      No LLM — narrative panel shows stub text as specified.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════
+       STEP 1 — INPUT
+  ══════════════════════════ -->
+  <div class="section-label">Step 1 — Enter Route Waypoints</div>
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-header">
+      <h2>Waypoint Input</h2>
+      <span class="badge">JSON · CSV</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--text-dim);">Ordered list · ISO 8601 UTC · Min 2 waypoints · Span 3–7 days</span>
+    </div>
+    <div class="form-grid">
+      <div>
+        <div class="textarea-wrap">
+          <textarea id="wp-input" spellcheck="false">[
+  {"latitude": 36.85, "longitude": -75.98, "timestamp": "2026-05-16T12:00:00Z"},
+  {"latitude": 36.20, "longitude": -76.10, "timestamp": "2026-05-16T18:00:00Z"},
+  {"latitude": 35.60, "longitude": -76.40, "timestamp": "2026-05-17T00:00:00Z"},
+  {"latitude": 35.10, "longitude": -76.70, "timestamp": "2026-05-17T06:00:00Z"},
+  {"latitude": 34.60, "longitude": -76.90, "timestamp": "2026-05-17T12:00:00Z"},
+  {"latitude": 34.10, "longitude": -77.10, "timestamp": "2026-05-17T18:00:00Z"},
+  {"latitude": 33.55, "longitude": -77.30, "timestamp": "2026-05-18T00:00:00Z"},
+  {"latitude": 33.00, "longitude": -77.55, "timestamp": "2026-05-18T06:00:00Z"},
+  {"latitude": 32.45, "longitude": -77.80, "timestamp": "2026-05-18T12:00:00Z"},
+  {"latitude": 31.90, "longitude": -78.00, "timestamp": "2026-05-18T18:00:00Z"},
+  {"latitude": 31.50, "longitude": -78.20, "timestamp": "2026-05-19T00:00:00Z"},
+  {"latitude": 31.20, "longitude": -78.40, "timestamp": "2026-05-19T06:00:00Z"}
+]</textarea>
+          <div class="count-pill" id="count-pill">12 waypoints detected</div>
+        </div>
+        <div class="format-hint">
+          <strong>JSON array:</strong> <code>[{"latitude":36.85,"longitude":-75.98,"timestamp":"2026-05-16T12:00:00Z"}, ...]</code><br/>
+          <strong>CSV:</strong> <code>lat,lon,timestamp</code> — one row per waypoint, header optional<br/>
+          Timestamps must be ISO 8601 UTC. Waypoints must be chronologically ordered.
+        </div>
+      </div>
+
+      <div class="form-controls">
+        <div>
+          <label>Input Format</label>
+          <select>
+            <option selected>JSON Array</option>
+            <option>CSV (lat, lon, timestamp)</option>
+          </select>
+        </div>
+        <div>
+          <label>Route Name <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+          <input type="text" id="route-name" value="Atlantic Coastal Transit" placeholder="e.g. Atlantic Coastal Transit" />
+        </div>
+        <div>
+          <label>Weather Source</label>
+          <select>
+            <option selected>Open-Meteo Marine + Forecast (global, no key)</option>
+            <option>Open-Meteo Marine only</option>
+            <option>Open-Meteo + NOAA NWS (US waters)</option>
+          </select>
+        </div>
+        <button class="btn-primary" id="run-btn" onclick="runForecast()">⚡ Run Forecast</button>
+        <button class="btn-secondary" onclick="loadSample()">Load sample route</button>
+        <button class="btn-secondary" onclick="clearAll()">Clear</button>
+        <div class="val-bar ok" id="val-bar">✓ 12 waypoints · span 66 h · timestamps UTC · chronological order verified</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════
+       PROGRESS
+  ══════════════════════════ -->
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="section-label" style="margin-bottom:14px;">Processing</div>
+    <div class="progress-steps">
+      <div class="step" id="s1"><div class="step-dot">1</div><div class="step-label">Waypoint<br/>Validator</div></div>
+      <div class="step" id="s2"><div class="step-dot">2</div><div class="step-label">Weather<br/>Retrieval</div></div>
+      <div class="step" id="s3"><div class="step-dot">3</div><div class="step-label">Feature<br/>Extractor</div></div>
+      <div class="step" id="s4"><div class="step-dot">4</div><div class="step-label">Tabular +<br/>Graphical</div></div>
+      <div class="step" id="s5"><div class="step-dot">5</div><div class="step-label">Formatter</div></div>
+    </div>
+    <div class="progress-foot" id="progress-foot">Starting…</div>
+  </div>
+
+  <!-- ══════════════════════════
+       OUTPUT
+  ══════════════════════════ -->
+  <div class="output-area" id="output-area">
+
+    <!-- Route summary -->
+    <div class="section-label">Forecast Output — Phase 1 MVP</div>
+    <div class="route-summary">
+      <div class="rs-item"><div class="rs-label">Route</div><div class="rs-value" id="out-name">Atlantic Coastal Transit</div></div>
+      <div class="divider"></div>
+      <div class="rs-item"><div class="rs-label">Waypoints</div><div class="rs-value">12</div></div>
+      <div class="divider"></div>
+      <div class="rs-item"><div class="rs-label">Depart</div><div class="rs-value mono">2026-05-16 12:00Z</div></div>
+      <div class="divider"></div>
+      <div class="rs-item"><div class="rs-label">Arrive</div><div class="rs-value mono">2026-05-19 06:00Z</div></div>
+      <div class="divider"></div>
+      <div class="rs-item"><div class="rs-label">Span</div><div class="rs-value">66 hrs</div></div>
+      <div class="divider"></div>
+      <div class="rs-item"><div class="rs-label">Source</div><div class="rs-value" style="font-size:13px;">Open-Meteo Marine + Forecast</div></div>
+      <div style="margin-left:auto;">
+        <div style="background:var(--navy-lt);border:1px solid var(--border);border-radius:12px;padding:5px 14px;font-size:11px;color:var(--text-dim);">
+          Phase 1 · No LLM · No QA layer
+        </div>
+      </div>
+    </div>
+
+    <!-- Map + peak stats -->
+    <div class="map-row">
+      <div class="card">
+        <div class="card-header"><h2>Route Map</h2><span class="badge">Leaflet · Interactive</span></div>
+        <div id="map"></div>
+        <div class="map-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#26c6da;"></div>Start</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#1e8bc3;"></div>Waypoint</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#ef5350;"></div>End</div>
+          <div class="legend-item">
+            <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#4fc3f7" stroke-width="2" stroke-dasharray="4,2"/></svg>
+            Route track
+          </div>
+          <span style="margin-left:auto;font-size:10px;color:var(--text-dim);">Wind barb arrows = per-waypoint direction (T6.3)</span>
+        </div>
+      </div>
+
+      <!-- 4 peak stats matching the 4 prototype fields -->
+      <div class="card stat-sidebar">
+        <div class="card-header"><h2>Peak Values</h2><span class="badge muted">Phase 1 fields only</span></div>
+        <div class="stat-grid-4">
+          <div class="stat-cell">
+            <div class="stat-lbl">Max Wind</div>
+            <div class="stat-val warn">22 <span class="stat-unit">kt</span></div>
+            <div class="stat-sub">WP-7 · NE direction</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-lbl">Temp Range</div>
+            <div class="stat-val" style="font-size:20px;">61–68 <span class="stat-unit">°F</span></div>
+            <div class="stat-sub">Min WP-8 · Max WP-1</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-lbl">Max Humidity</div>
+            <div class="stat-val warn">88 <span class="stat-unit">%</span></div>
+            <div class="stat-sub">WP-8 · frontal passage</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-lbl">Precip Windows</div>
+            <div class="stat-val rain">4 <span class="stat-unit">WPs</span></div>
+            <div class="stat-sub">WP-4, 5, 7, 8</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════
+         TRANSPOSED TABLE — 4 prototype fields only
+         Rows: Wind Speed/Dir · Temperature · Humidity · Precipitation
+         Cols: one per waypoint
+    ════════════════════════════════════════════ -->
+    <div class="section-label" style="margin-bottom:10px;">Columns-per-Waypoint Weather Table</div>
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <h2>Weather Table</h2>
+        <span class="badge">4 fields · 12 waypoints</span>
+        <span style="font-size:11px;color:var(--text-dim);margin-left:4px;">← scroll to see all waypoints →</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text-dim);">Fields per T3.1 + T6.3 + Week 3 exit criteria</span>
+      </div>
+      <div class="table-scroll">
+        <table class="wx-table">
+          <thead>
+            <tr id="wx-thead">
+              <th class="row-hdr">Variable</th>
+              <!-- injected by JS -->
+            </tr>
+          </thead>
+          <tbody id="wx-tbody">
+            <!-- injected by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Narrative stub (Phase 1 — no LLM) -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <h2>Forecast Discussion</h2>
+        <span class="badge muted">Stub — No LLM (Phase 1)</span>
+      </div>
+      <div class="stub-banner">
+        <span style="font-size:20px;">⚠</span>
+        <div>
+          <strong>Narrative generation not yet available.</strong>
+          The AI forecast discussion will be generated by Gemini 2.5 Pro in Phase 2 (Week 4).
+          For now this panel shows a placeholder. &mdash;
+          <em style="color:#a08000;">Forecast pending narrative generation.</em>
+        </div>
+      </div>
+    </div>
+
+    <!-- Run metadata -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;">
+      <div style="font-size:11px;color:var(--text-dim);">Run ID <span style="color:var(--text);font-family:monospace;">b9e21f04-3c7a-4d0e-a81b</span></div>
+      <div style="font-size:11px;color:var(--text-dim);">Submitted <span style="color:var(--text);font-family:monospace;">2026-05-16T11:47:03Z</span></div>
+      <div style="font-size:11px;color:var(--text-dim);">Wall time <span style="color:var(--text);font-family:monospace;">11.2 s</span></div>
+      <div style="font-size:11px;color:var(--text-dim);">Weather fetches <span style="color:var(--text);font-family:monospace;">24 async</span></div>
+      <div style="font-size:11px;color:var(--text-dim);">LLM calls <span style="color:var(--text);font-family:monospace;">0 (Phase 1)</span></div>
+      <div style="font-size:11px;color:var(--text-dim);">Stored <span style="color:var(--text);font-family:monospace;">./data/runs/b9e21f04.json</span></div>
+      <div style="margin-left:auto;">
+        <button style="background:var(--navy-lt);border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px;">⬇ Download JSON</button>
+      </div>
+    </div>
+
+  </div><!-- /output-area -->
+</div><!-- /page -->
+
+<script>
+// ══════════════════════════════
+// DATA — prototype fields only
+// ══════════════════════════════
+const WP = [
+  { n:1,  lat:36.85, lon:-75.98, time:'05-16 12Z', wind:12, dir:'N',   temp:68, hum:72, precip:false },
+  { n:2,  lat:36.20, lon:-76.10, time:'05-16 18Z', wind:14, dir:'NNE', temp:67, hum:74, precip:false },
+  { n:3,  lat:35.60, lon:-76.40, time:'05-17 00Z', wind:15, dir:'NE',  temp:65, hum:78, precip:false },
+  { n:4,  lat:35.10, lon:-76.70, time:'05-17 06Z', wind:16, dir:'NE',  temp:64, hum:81, precip:true  },
+  { n:5,  lat:34.60, lon:-76.90, time:'05-17 12Z', wind:17, dir:'NE',  temp:63, hum:84, precip:true  },
+  { n:6,  lat:34.10, lon:-77.10, time:'05-17 18Z', wind:18, dir:'NE',  temp:63, hum:85, precip:false },
+  { n:7,  lat:33.55, lon:-77.30, time:'05-18 00Z', wind:22, dir:'NE',  temp:62, hum:87, precip:true  },
+  { n:8,  lat:33.00, lon:-77.55, time:'05-18 06Z', wind:21, dir:'NE',  temp:61, hum:88, precip:true  },
+  { n:9,  lat:32.45, lon:-77.80, time:'05-18 12Z', wind:18, dir:'ENE', temp:62, hum:84, precip:false },
+  { n:10, lat:31.90, lon:-78.00, time:'05-18 18Z', wind:15, dir:'E',   temp:63, hum:79, precip:false },
+  { n:11, lat:31.50, lon:-78.20, time:'05-19 00Z', wind:12, dir:'ESE', temp:65, hum:74, precip:false },
+  { n:12, lat:31.20, lon:-78.40, time:'05-19 06Z', wind:10, dir:'SE',  temp:66, hum:70, precip:false },
+];
+
+// Direction → CSS rotation degrees (arrow points FROM, so wind FROM N = arrow points down)
+const DIR_DEG = { N:180, NNE:202.5, NE:225, ENE:247.5, E:270, ESE:292.5, SE:315, SSE:337.5, S:0, SSW:22.5, SW:45, WSW:67.5, W:90, WNW:112.5, NW:135, NNW:157.5 };
+
+function tempClass(t) {
+  if (t <= 62) return 'temp-60';
+  if (t <= 64) return 'temp-63';
+  if (t <= 67) return 'temp-66';
+  return 'temp-69';
+}
+
+// ══════════════════════════════
+// Four prototype row definitions
+// ══════════════════════════════
+const ROWS = [
+  {
+    label: 'Wind Speed',
+    icon: '💨',
+    sub: 'knots · direction glyph (T6.3)',
+    render(wp) {
+      const warn = wp.wind >= 20;
+      const deg = DIR_DEG[wp.dir] ?? 0;
+      return `
+        <div class="wind-cell">
+          <div class="wind-speed ${warn ? 'cell-warn' : 'cell-ok'}">${wp.wind} <span style="font-size:11px;font-weight:400;color:var(--text-dim);">kt</span></div>
+          <div class="wind-glyph" title="Wind from ${wp.dir}" style="transform:rotate(${deg}deg);display:inline-block;">↑</div>
+          <div class="wind-dir-lbl">${wp.dir}</div>
+        </div>`;
+    }
+  },
+  {
+    label: 'Temperature',
+    icon: '🌡',
+    sub: '°F · Open-Meteo forecast API',
+    render(wp) {
+      return `<span class="${tempClass(wp.temp)}" style="font-size:17px;font-weight:700;">${wp.temp}<span style="font-size:11px;font-weight:400;color:var(--text-dim);"> °F</span></span>`;
+    }
+  },
+  {
+    label: 'Humidity',
+    icon: '💧',
+    sub: '% relative · Open-Meteo forecast API',
+    render(wp) {
+      const pct = wp.hum;
+      const warn = pct >= 85;
+      const barW = Math.round(pct * 0.48); // max bar 48px at 100%
+      return `
+        <div class="hum-cell">
+          <div class="hum-val ${warn ? 'cell-warn' : ''}">${pct}<span style="font-size:11px;font-weight:400;color:var(--text-dim);"> %</span></div>
+          <div class="hum-bar-bg"><div class="hum-bar-fill" style="width:${barW}px;background:${warn?'#f9a825':pct>80?'#26c6da':'var(--accent)'}"></div></div>
+        </div>`;
+    }
+  },
+  {
+    label: 'Precipitation',
+    icon: '🌧',
+    sub: 'yes / no · Open-Meteo forecast API',
+    render(wp) {
+      return wp.precip
+        ? `<div class="precip-yes"><div class="precip-icon">🌧</div><div class="precip-lbl">Rain</div></div>`
+        : `<span class="cell-dim" style="font-size:18px;">—</span>`;
+    }
+  }
+];
+
+// ══════════════════════════════
+// Build transposed table
+// ══════════════════════════════
+function buildTable(data) {
+  const thead = document.getElementById('wx-thead');
+  const tbody = document.getElementById('wx-tbody');
+  thead.innerHTML = '<th class="row-hdr">Variable</th>';
+  tbody.innerHTML = '';
+
+  // Column headers
+  data.forEach(wp => {
+    const isStart = wp.n === 1, isEnd = wp.n === data.length;
+    const color = isStart ? '#26c6da' : isEnd ? '#ef5350' : 'var(--accent2)';
+    const th = document.createElement('th');
+    th.className = 'wp-col-head';
+    th.innerHTML = `
+      <div class="wp-num" style="color:${color};">WP-${wp.n}</div>
+      <div class="wp-lat">${wp.lat.toFixed(2)}°N&nbsp;${Math.abs(wp.lon).toFixed(2)}°W</div>
+      <div class="wp-time">${wp.time}</div>`;
+    thead.appendChild(th);
+  });
+
+  // Data rows — one per variable
+  ROWS.forEach(row => {
+    const tr = document.createElement('tr');
+    // Row header
+    const th = document.createElement('td');
+    th.className = 'row-hdr';
+    th.innerHTML = `<span class="row-icon">${row.icon}</span>${row.label}<span class="row-sub">${row.sub}</span>`;
+    tr.appendChild(th);
+    // Data cells
+    data.forEach(wp => {
+      const td = document.createElement('td');
+      td.innerHTML = row.render(wp);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+// ══════════════════════════════
+// Leaflet map (lazy init)
+// ══════════════════════════════
+let mapInit = false;
+function initMap() {
+  if (mapInit) return;
+  mapInit = true;
+  const map = L.map('map').setView([34.2, -77.0], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 12
+  }).addTo(map);
+
+  L.polyline(WP.map(w => [w.lat, w.lon]), { color:'#4fc3f7', weight:2.5, dashArray:'6,4', opacity:0.9 }).addTo(map);
+
+  WP.forEach((wp, i) => {
+    const isStart = i === 0, isEnd = i === WP.length - 1;
+    const col = isStart ? '#26c6da' : isEnd ? '#ef5350' : '#1e8bc3';
+    L.circleMarker([wp.lat, wp.lon], {
+      radius: isStart||isEnd ? 9 : 6, fillColor: col, color:'#fff',
+      weight: isStart||isEnd ? 2 : 1.5, fillOpacity: 1
+    }).bindTooltip(`WP-${wp.n} · ${wp.time}<br/>${wp.wind} kt ${wp.dir} · ${wp.temp}°F · ${wp.hum}% RH${wp.precip?' · 🌧':''}`)
+      .addTo(map);
+
+    // Wind barb glyph (T6.3)
+    const deg = DIR_DEG[wp.dir] ?? 0;
+    if (i % 2 === 0 && !isEnd) {
+      const icon = L.divIcon({
+        html: `<div style="font-size:17px;color:#ffd54f;transform:rotate(${deg}deg);text-shadow:0 0 4px #000;" title="Wind from ${wp.dir}">↑</div>`,
+        iconSize:[20,20], className:''
+      });
+      L.marker([wp.lat + 0.07, wp.lon + 0.07], { icon }).addTo(map);
+    }
+  });
+}
+
+// ══════════════════════════════
+// Live input counter
+// ══════════════════════════════
+document.getElementById('wp-input').addEventListener('input', function() {
+  const pill = document.getElementById('count-pill');
+  const vbar = document.getElementById('val-bar');
+  try {
+    const arr = JSON.parse(this.value.trim());
+    if (Array.isArray(arr)) {
+      const n = arr.length;
+      pill.textContent = `${n} waypoint${n!==1?'s':''} detected`;
+      if (n < 2) {
+        vbar.className = 'val-bar err'; vbar.textContent = '✗ Minimum 2 waypoints required.';
+      } else {
+        vbar.className = 'val-bar ok';
+        vbar.textContent = `✓ ${n} waypoints · timestamps will be validated to UTC`;
+      }
+    }
+  } catch {
+    pill.textContent = 'Parsing…';
+    vbar.className = 'val-bar info'; vbar.textContent = 'ℹ Paste a JSON array or CSV to validate.';
+  }
+});
+
+// ══════════════════════════════
+// Run forecast (mockup animation)
+// ══════════════════════════════
+const STEP_LABELS = [
+  'Validating waypoints…',
+  'Fetching weather data (24 async calls)…',
+  'Extracting features…',
+  'Building tabular + graphical products…',
+  'Formatting response…'
+];
+
+function runForecast() {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true; btn.textContent = '⏳ Starting…';
+
+  for (let i = 1; i <= 5; i++) {
+    const s = document.getElementById(`s${i}`);
+    s.className = 'step';
+    s.querySelector('.step-dot').textContent = i;
+    s.querySelector('.step-label').style.color = '';
+  }
+
+  document.getElementById('progress-wrap').classList.add('visible');
+  document.getElementById('output-area').classList.remove('visible');
+  document.getElementById('progress-foot').textContent = 'Starting…';
+
+  let idx = 0;
+  function tick() {
+    if (idx > 0) {
+      const prev = document.getElementById(`s${idx}`);
+      prev.className = 'step done';
+      prev.querySelector('.step-dot').textContent = '✓';
+    }
+    if (idx < 5) {
+      idx++;
+      const cur = document.getElementById(`s${idx}`);
+      cur.className = 'step active';
+      cur.querySelector('.step-dot').textContent = idx;
+      btn.textContent = `⏳ ${STEP_LABELS[idx-1]}`;
+      document.getElementById('progress-foot').textContent = STEP_LABELS[idx-1];
+      const delay = idx === 2 ? 1000 : 500; // weather fetch step takes longer
+      setTimeout(tick, delay);
+    } else {
+      finish();
+    }
+  }
+  tick();
+}
+
+function finish() {
+  const name = document.getElementById('route-name').value.trim() || 'Unnamed Route';
+  document.getElementById('out-name').textContent = name;
+  document.getElementById('progress-foot').textContent = 'Done · Wall time: 11.2 s · 24 async weather fetches · 0 LLM calls';
+
+  buildTable(WP);
+  document.getElementById('output-area').classList.add('visible');
+  initMap();
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = false; btn.textContent = '⚡ Run Forecast';
+  document.getElementById('output-area').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// ══════════════════════════════
+// Helpers
+// ══════════════════════════════
+const SAMPLE = `[
+  {"latitude": 36.85, "longitude": -75.98, "timestamp": "2026-05-16T12:00:00Z"},
+  {"latitude": 36.20, "longitude": -76.10, "timestamp": "2026-05-16T18:00:00Z"},
+  {"latitude": 35.60, "longitude": -76.40, "timestamp": "2026-05-17T00:00:00Z"},
+  {"latitude": 35.10, "longitude": -76.70, "timestamp": "2026-05-17T06:00:00Z"},
+  {"latitude": 34.60, "longitude": -76.90, "timestamp": "2026-05-17T12:00:00Z"},
+  {"latitude": 34.10, "longitude": -77.10, "timestamp": "2026-05-17T18:00:00Z"},
+  {"latitude": 33.55, "longitude": -77.30, "timestamp": "2026-05-18T00:00:00Z"},
+  {"latitude": 33.00, "longitude": -77.55, "timestamp": "2026-05-18T06:00:00Z"},
+  {"latitude": 32.45, "longitude": -77.80, "timestamp": "2026-05-18T12:00:00Z"},
+  {"latitude": 31.90, "longitude": -78.00, "timestamp": "2026-05-18T18:00:00Z"},
+  {"latitude": 31.50, "longitude": -78.20, "timestamp": "2026-05-19T00:00:00Z"},
+  {"latitude": 31.20, "longitude": -78.40, "timestamp": "2026-05-19T06:00:00Z"}
+]`;
+
+function loadSample() {
+  document.getElementById('wp-input').value = SAMPLE;
+  document.getElementById('count-pill').textContent = '12 waypoints detected';
+  document.getElementById('val-bar').className = 'val-bar ok';
+  document.getElementById('val-bar').textContent = '✓ 12 waypoints · span 66 h · timestamps UTC · chronological order verified';
+}
+function clearAll() {
+  document.getElementById('wp-input').value = '';
+  document.getElementById('count-pill').textContent = '0 waypoints';
+  document.getElementById('val-bar').className = 'val-bar info';
+  document.getElementById('val-bar').textContent = 'ℹ Paste a JSON array or CSV to validate.';
+  document.getElementById('output-area').classList.remove('visible');
+  document.getElementById('progress-wrap').classList.remove('visible');
+}
+</script>
+</body>
+</html>
