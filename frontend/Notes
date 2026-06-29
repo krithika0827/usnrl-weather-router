@@ -1,0 +1,33 @@
+Done
+Basic App page set up
+Accepts coordinates
+Returns real weather chart info
+Added Map
+Display peak values
+Bolder text on chart for better readability
+Docker improvements
+change update button to save
+improved peak values display
+enabled user edits for weather data
+peak values and route map updates when table is updated
+added route name and vessel name user inputs
+Added estimated travel time and travel distance
+
+Added Regenerate Weather Situation feature
+Added download feature
+Added an upload JSON feature
+Made the map reorient if the way points are moved
+Improved Waypoint error msg handling
+Improved comments
+Changed Site page name and icon
+Updated all mentions of "Ship" to "Vehicle"
+
+In Progress
+
+To do
+Needs real AI generated Forecast Discussion text
+Need unique id that can be used in app back end to save/load routes
+
+Stretch goals
+Allow users to download a PDF report
+In APP Save and load previous routes
