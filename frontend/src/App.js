@@ -1,4 +1,4 @@
-import React, {useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import "./App.css";
 
 // for the Map
@@ -8,61 +8,215 @@ import {
     TileLayer,
     Marker,
     Popup,
-    Polyline
+    Polyline,
+    useMap
 } from "react-leaflet";
 import L from "leaflet";
 
-// Used to create numbered way points on map
-function createWaypointIcon(number) {
-    return L.divIcon({
-        className: "",
-        html: `
-            <div style="
-                background:#1e8bc3;
-                color:white;
-                border-radius:50%;
-                width:30px;
-                height:30px;
-                display:flex;
-                justify-content:center;
-                align-items:center;
-                font-weight:bold;
-                border:2px solid white;
-            ">
-                ${number}
-            </div>
-        `,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15]
-    });
+// Recenter the map when route points fall outside the current view.
+function RouteBoundsUpdater({points}) {
+    const map = useMap();
+
+    useEffect(() => {
+        const positions = points
+            .map((wp) => [Number(wp.lat), Number(wp.lon)])
+            .filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
+
+        if (positions.length === 0) return;
+
+        if (positions.length === 1) {
+            if (!map.getBounds().contains(positions[0])) {
+                map.setView(positions[0], Math.max(map.getZoom(), 6));
+            }
+            return;
+        }
+        const routeBounds = L.latLngBounds(positions);
+        if (!map.getBounds().contains(routeBounds)) {
+            map.fitBounds(routeBounds, {
+                padding: [40, 40],
+                maxZoom: 8
+            });
+        }
+    }, [map, points]);
+
+    return null;
 }
 
+function App() {
+
+    // Download the current weather context as a JSON file.
+    function saveWeatherContextJson() {
+        const json = JSON.stringify(buildWeatherContext(), null, 2);
+        const blob = new Blob([json], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download = "weather-context.json";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    // Open the hidden JSON file input from the visible upload button.
+    function openWeatherContextUpload() {
+        jsonUploadInputRef.current?.click();
+    }
+
+    // Validate uploaded route points before they are used by the table or map.
+    function getUploadedRouteError(route) {
+        for (let i = 0; i < route.length; i++) {
+            const waypoint = route[i];
+
+            if (!waypoint || typeof waypoint !== "object") {
+                return `Waypoint ${i + 1} must be an object.`;
+            }
+
+            const lat = Number(waypoint.lat);
+            const lon = Number(waypoint.lon);
+
+            if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+                return `Waypoint ${i + 1} must include a valid latitude between -90 and 90.`;
+            }
+
+            if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
+                return `Waypoint ${i + 1} must include a valid longitude between -180 and 180.`;
+            }
+
+            if (!waypoint.eta) {
+                return `Waypoint ${i + 1} must include an ETA.`;
+            }
+        }
+
+        return "";
+    }
+
+    // Convert optional imported weather values to numbers, preserving blanks as null.
+    function parseOptionalNumber(value) {
+        if (value === "" || value === null || value === undefined) return null;
+
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+    }
+
+    // Read an uploaded weather-context JSON file and restore app state from it.
+    async function uploadWeatherContextJson(event) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const weatherContext = JSON.parse(await file.text());
+
+            if (!Array.isArray(weatherContext.route)) {
+                setError("Uploaded JSON must include a route array.");
+                return;
+            }
+
+            const routeError = getUploadedRouteError(weatherContext.route);
+            if (routeError) {
+                setError(routeError);
+                return;
+            }
+
+            const importedRoute = weatherContext.route.map((wp) => ({
+                eta: wp.eta,
+                lat: Number(wp.lat),
+                lon: Number(wp.lon),
+                temperature_f: parseOptionalNumber(wp.temperature_f),
+                wind_speed_mph: parseOptionalNumber(wp.wind_speed_mph),
+                humidity_pct: parseOptionalNumber(wp.humidity_pct),
+                precipitation_in: parseOptionalNumber(wp.precipitation_in)
+            }));
+            const importedWaypoints = importedRoute.map((wp) => ({
+                lat: wp.lat,
+                lon: wp.lon,
+                eta: wp.eta
+            }));
+            const importedForecastText = weatherContext.summary ?? "";
+
+            setVehicleName(weatherContext.vehicleName ?? "");
+            setRouteName(weatherContext.routeName ?? "");
+            setWaypointsText(JSON.stringify(importedWaypoints, null, 2));
+            setWeatherData(importedRoute);
+            setForecastText(importedForecastText);
+            setWeatherSituationText(importedForecastText);
+            setError("");
+        } catch (err) {
+            setError(`Could not upload JSON: ${err.message}`);
+        } finally {
+            event.target.value = "";
+        }
+    }
+
+    // Build the weather context object used for JSON export and AI input.
+    function buildWeatherContext() {
+        return {
+            vehicleName,
+            routeName,
+            summary: forecastText,
+            peakValues: {
+                temperature_f: {min: minTemp, max: maxTemp
+                },
+                wind_speed_mph: {min: minWind, max: maxWind
+                },
+                humidity_pct: {min: minHumidity, max: maxHumidity
+                },
+                precipitation_in: {min: minPrecip, max: maxPrecip
+                }
+            },
+            travelDetails,
+            route: weatherData.map((wp, index) => ({
+                waypoint: index + 1,
+                eta: wp.eta,
+                lat: wp.lat,
+                lon: wp.lon,
+                temperature_f: wp.temperature_f,
+                wind_speed_mph: wp.wind_speed_mph,
+                humidity_pct: wp.humidity_pct,
+                precipitation_in: wp.precipitation_in
+            }))
+        };
+    }
+
+    // Pass the current weather context to the AI placeholder and update the Weather Situation text.
+    function regenerateWeatherSituation() {
+        const updatedForecastText = aiPlaceHolder(buildWeatherContext());
+
+        setForecastText(updatedForecastText);
+        setWeatherSituationText(updatedForecastText);
+    }
+
+    // Dummy AI placeholder that appends "X" to the forecast summary.
+    function aiPlaceHolder(weatherContext) {
+        return `${weatherContext.summary}X`;
+    }
+
+
+// Placeholder weather report
+const placeHolderText = `Example of the "Weather Situation"
+THE <VEHICLE NAME> WILL CONTINUE TO TRANSIT BEHIND A COLD FRONT THAT HAS BECOME STATIONARY IN THE <LOCATION>. THE VESSELS WILL EXPERIENCE STEADY NORTHEAST WINDS OF 15-25 KNOTS WITH GUSTS TO 35 KNOTS FOR THE FIRST HALF OF THIS FORECAST.
+THE WINDS ARE FORECAST TO DECREASE SLIGHTLY BY THE END OF THE PERIOD. NORTHEAST SEAS OF 10-15 FEET ARE FORECAST TO SLOWLY DECREASE WITH THE FALLING WIND SPEEDS AS THE VESSEL GETS CLOSER TO THE <LOCATION>.
+MOSTLY CLOUDY AND COOL CONDITIONS ARE FORECAST BEHIND THE COLD FRONT. WARMING AIR AND SEA TEMPERATURES ARE EXPECTED AS THE VESSEL TRANSITS SOUTHWARD.
+AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THROUGH THE PERIOD.`;
+
 // prefilled waypoints for faster testing
-const sampleWaypoints = `[
+    const sampleWaypoints = `[
   { "lat": 36.85, "lon": -76.30, "eta": "2026-06-08T12:00:00Z" },
   { "lat": 36.20, "lon": -76.55, "eta": "2026-06-08T18:00:00Z" },
   { "lat": 35.65, "lon": -76.90, "eta": "2026-06-09T00:00:00Z" },
   { "lat": 35.10, "lon": -77.20, "eta": "2026-06-09T06:00:00Z" },
   { "lat": 34.55, "lon": -77.45, "eta": "2026-06-09T12:00:00Z" }
 ]`;
-
-// Placeholder weather report
-const placeHolderText = `
-Example of the "Weather Situation"
-THE <SHIP NAME> WILL CONTINUE TO TRANSIT BEHIND A COLD FRONT THAT HAS BECOME STATIONARY IN THE <LOCATION>. THE VESSELS WILL EXPERIENCE STEADY NORTHEAST WINDS OF 15-25 KNOTS WITH GUSTS TO 35 KNOTS FOR THE FIRST HALF OF THIS FORECAST.
-THE WINDS ARE FORECAST TO DECREASE SLIGHTLY BY THE END OF THE PERIOD. NORTHEAST SEAS OF 10-15 FEET ARE FORECAST TO SLOWLY DECREASE WITH THE FALLING WIND SPEEDS AS THE VESSEL GETS CLOSER TO THE <LOCATION>.
-MOSTLY CLOUDY AND COOL CONDITIONS ARE FORECAST BEHIND THE COLD FRONT. WARMING AIR AND SEA TEMPERATURES ARE EXPECTED AS THE VESSEL TRANSITS SOUTHWARD.
-AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THROUGH THE PERIOD.
-`;
-
-function App() {
     const [waypointsText, setWaypointsText] = useState(sampleWaypoints);
     const [weatherData, setWeatherData] = useState([]);
     const [forecastText, setForecastText] = useState(placeHolderText);
+    const [weatherSituationText, setWeatherSituationText] = useState(placeHolderText);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
-    const [shipName, setShipName] = useState("Borealis");
+    const [vehicleName, setVehicleName] = useState("Borealis");
     const [routeName, setRouteName] = useState("Kessel Run");
+    const jsonUploadInputRef = useRef(null);
 
     const {min: minTemp, max: maxTemp} = getMinMax("temperature_f");
     const {min: minWind, max: maxWind} = getMinMax("wind_speed_mph");
@@ -71,7 +225,7 @@ function App() {
 
     const travelDetails = getTravelDetails();
 
-    /* Min max improved */
+    // Find the min and max values for one weather field across the route.
     function getMinMax(field) {
         const values = weatherData
             .map(wp => wp[field])
@@ -89,6 +243,7 @@ function App() {
         };
     }
 
+    // Update one editable weather table cell while keeping numeric fields numeric.
     function updateWeatherCell(index, field, value) {
         const number = Number(value);
         const numericValue =
@@ -107,27 +262,47 @@ function App() {
         );
     }
 
-    // display and update weather data
+    // Convert unknown error values to text
+    function errorValueToText(value) {
+        if (value === null || value === undefined) return "";
+        if (typeof value !== "object") return String(value);
 
-    function buildWeatherContext() {
-        return {
-            shipName,
-            routeName,
-            route: weatherData.map((wp, index) => ({
-                waypoint: index + 1,
-                eta: wp.eta,
-                lat: wp.lat,
-                lon: wp.lon,
-                temperature_f: wp.temperature_f,
-                wind_speed_mph: wp.wind_speed_mph,
-                humidity_pct: wp.humidity_pct,
-                precipitation_in: wp.precipitation_in
-            }))
-        };
+        try {
+            return JSON.stringify(value);
+        } catch {
+            return String(value);
+        }
     }
 
-    // Get weather info
+    // Remove backend validation prefixes that are not useful to the user.
+    function cleanErrorMessage(message) {
+        return errorValueToText(message).replace(/^Value error,\s*/i, "");
+    }
 
+    // Convert API error responses into display-ready message text.
+    function formatForecastError(data) {
+        if (Array.isArray(data?.detail)) {
+            return data.detail
+                .map((errorItem) => cleanErrorMessage(errorItem.msg ?? errorItem.message ?? errorItem))
+                .join("\n");
+        }
+
+        if (data?.detail) {
+            return cleanErrorMessage(data.detail);
+        }
+
+        if (data?.msg || data?.message || data?.error) {
+            return cleanErrorMessage(data.msg ?? data.message ?? data.error);
+        }
+
+        if (data && typeof data === "object") {
+            return cleanErrorMessage(data);
+        }
+
+        return "Forecast request failed.";
+    }
+
+    // Submit waypoints to the forecast API and load returned route weather data.
     async function runForecast() {
         setError("");
         setLoading(true);
@@ -144,7 +319,7 @@ function App() {
             });
             const data = await response.json();
             if (!response.ok) {
-                setError(JSON.stringify(data, null, 2));
+                setError(formatForecastError(data));
                 setWeatherData([]);
                 return;
             }
@@ -163,10 +338,12 @@ function App() {
         return min === max ? `${min}` : `${min} - ${max}`;
     };
 
+    // Convert degrees to radians for distance calculations.
     function toRadians(degrees) {
         return degrees * (Math.PI / 180);
     }
 
+    // Calculate the mileage between two lat/lon coordinates.
     function getDistanceMiles(lat1, lon1, lat2, lon2) {
         const earthRadiusMiles = 3958.8;
 
@@ -180,10 +357,10 @@ function App() {
             Math.sin(dLon / 2) ** 2;
 
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
         return earthRadiusMiles * c;
     }
 
+    // Calculate total route duration and distance from the current route points.
     function getTravelDetails() {
         if (weatherData.length < 2) {
             return {
@@ -191,14 +368,10 @@ function App() {
                 travelDistance: "N/A"
             };
         }
-
         const start = new Date(weatherData[0].eta);
         const end = new Date(weatherData[weatherData.length - 1].eta);
-
         const hours = Math.abs(end - start) / (1000 * 60 * 60);
-
         let totalMiles = 0;
-
         for (let i = 1; i < weatherData.length; i++) {
             totalMiles += getDistanceMiles(
                 weatherData[i - 1].lat,
@@ -207,11 +380,34 @@ function App() {
                 weatherData[i].lon
             );
         }
-
         return {
             travelTime: `${hours.toFixed(1)} hrs`,
             travelDistance: `${totalMiles.toFixed(1)} mi`
         };
+    }
+    // Create a numbered Leaflet marker icon for each waypoint.
+    function createWaypointIcon(number) {
+        return L.divIcon({
+            className: "",
+            html: `
+            <div style="
+                background:#1e8bc3;
+                color:white;
+                border-radius:50%;
+                width:30px;
+                height:30px;
+                display:flex;
+                justify-content:center;
+                align-items:center;
+                font-weight:bold;
+                border:2px solid white;
+            ">
+                ${number}
+            </div>
+        `,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+        });
     }
 
     return (
@@ -260,7 +456,7 @@ function App() {
                         }}
                     >
                         <div>
-                            {/* Input Ship Name */}
+                            {/* Input Vehicle Name */}
                             <label
                                 style={{
                                     display: "block",
@@ -268,12 +464,12 @@ function App() {
                                     fontWeight: "bold"
                                 }}
                             >
-                                Ship Name
+                                Vehicle Name
                             </label>
                             <input
                                 type="text"
-                                value={shipName}
-                                onChange={(e) => setShipName(e.target.value)}
+                                value={vehicleName}
+                                onChange={(e) => setVehicleName(e.target.value)}
                                 style={{
                                     width: "100%",
                                     padding: "8px"
@@ -312,6 +508,23 @@ function App() {
                             }}
                         >
                             {loading ? "Loading..." : "Run Forecast"}
+                        </button>
+                        <input
+                            ref={jsonUploadInputRef}
+                            type="file"
+                            accept="application/json,.json"
+                            onChange={uploadWeatherContextJson}
+                            style={{display: "none"}}
+                        />
+                        <button
+                            onClick={openWeatherContextUpload}
+                            style={{
+                                marginTop: "10px",
+                                padding: "12px",
+                                width: "100%"
+                            }}
+                        >
+                            Upload JSON
                         </button>
                     </div>
                 </div>
@@ -399,6 +612,8 @@ function App() {
                             zoom={6}
                             style={{height: "500px", width: "100%"}}
                         >
+                            <RouteBoundsUpdater points={weatherData}/>
+
                             <TileLayer
                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                                 attribution="&copy; OpenStreetMap contributors"
@@ -475,7 +690,7 @@ function App() {
 
                         <div className="card travel-card">
                             <div className="card-header">
-                                <h2>Travel Details (Estmated)</h2>
+                                <h2>Travel Details</h2>
                             </div>
 
                             <table border="1" cellPadding="8" style={{width: "100%"}}>
@@ -505,8 +720,11 @@ function App() {
                     {/* Weather Situation */}
                     <div style={{padding: "20px"}}>
                         <textarea
-                            value={forecastText}
-                            onChange={(e) => setForecastText(e.target.value)}
+                            value={weatherSituationText}
+                            onChange={(e) => {
+                                setWeatherSituationText(e.target.value);
+                                setForecastText(e.target.value);
+                            }}
                             rows={10}
                             style={{
                                 width: "100%",
@@ -523,13 +741,18 @@ function App() {
                                 }}
                             >
                                 <button
-                                    onClick={() =>
-                                        setForecastText(
-                                            JSON.stringify(buildWeatherContext(), null, 2)
-                                        )
-                                    }
+                                    style={{width: "190px", minWidth: "190px"}}
+                                    onClick={regenerateWeatherSituation}
                                 >
-                                    AI data example / Generate JSON
+                                    Regenerate<br />
+                                    Weather Situation
+                                </button>
+
+                                <button
+                                    onClick={saveWeatherContextJson}
+                                >
+                                    Download<br />
+                                    JSON
                                 </button>
 
                                 <button
@@ -539,7 +762,7 @@ function App() {
                                         alert("<WIP> Forecast text saved.");
                                     }}
                                 >
-                                    Save
+                                    Save 💾
                                 </button>
                             </div>
                         </div>
