@@ -20,7 +20,7 @@ stubbed behind a frozen API contract so every lane can build in parallel.
 | `validation` (review-agent findings) | ⏸️ stubbed `[]` | Ryan |
 | Frontend map | ✅ working | Reece |
 | Frontend table | ✅ working | Reece |
-| Frontend table ranges | ⏸️ needs improvement | Reece |
+| Frontend table ranges | ✅ working | Reece |
 | Frontend forecast box | ⏸️ placeholder | Reece |
 
 ## Quickstart
