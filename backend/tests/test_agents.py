@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from app.agents.graph import run_validation
+from app.agents.specialized.generator import generate_weather_summary
 from app.models.weather_data import WaypointForecast
 
 
@@ -130,3 +131,41 @@ def test_valid_route_returns_no_findings():
     )
 
     assert findings == []
+
+
+def test_generator_creates_summary_from_route_data():
+    # Checks that the summary uses the route metrics and avoids placeholder text.
+    summary = generate_weather_summary([
+        make_waypoint(
+            temperature_f=68,
+            wind_speed_mph=12,
+            precipitation_in=0,
+            humidity_pct=55,
+        ),
+        make_waypoint(
+            temperature_f=74,
+            wind_speed_mph=18,
+            precipitation_in=0,
+            humidity_pct=62,
+        ),
+    ])
+
+    assert "68.0 to 74.0 F" in summary
+    assert "12.0 to 18.0 mph" in summary
+    assert "No measurable accumulation" in summary
+    assert "placeholder" not in summary.lower()
+    assert run_validation([make_waypoint()], summary) == []
+
+
+def test_generator_notes_missing_weather_data():
+    # Checks graceful summary text when weather providers return null metrics.
+    summary = generate_weather_summary([
+        make_waypoint(
+            temperature_f=None,
+            wind_speed_mph=None,
+            precipitation_in=None,
+            humidity_pct=None,
+        )
+    ])
+
+    assert "no temperature, wind, humidity, or precipitation values are available" in summary

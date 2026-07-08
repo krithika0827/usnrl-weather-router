@@ -7,10 +7,9 @@ This is the single shape every lane builds against:
 - **Krithika (AI)** generates `summary` *from* the `route` table.
 - **Ryan (agents)** fills `validation` by checking `summary` against `route`.
 
-Because the AI fields are stubbed (`summary: null`, `validation: []`), the
-deterministic pipeline ships first and the AI/agent work bolts on later
-**without changing this contract**. That's what lets the four of us proceed in
-parallel today.
+The response envelope is stable: deterministic weather retrieval fills `route`,
+the summary generator fills `summary`, and the validation graph fills
+`validation`.
 
 ---
 
@@ -58,7 +57,7 @@ time of arrival (ISO 8601, UTC).
       "humidity_pct": 65
     }
   ],
-  "summary": null,
+  "summary": "Route guidance covers 1 waypoint(s) from 2026-06-10 14:00 UTC near 36.85, -76.30. Temperatures are expected to be mild, ranging from 75.4 F. Wind conditions indicate light winds, with speeds from 11.2 mph. No measurable accumulation is indicated at the route waypoints. Relative humidity ranges from 65%. Overall operational weather risk appears limited based on the provided metrics.",
   "validation": []
 }
 ```
@@ -72,8 +71,8 @@ time of arrival (ISO 8601, UTC).
 | `route[].wind_speed_mph` | number \| null | Joseph | miles per hour |
 | `route[].precipitation_in` | number \| null | Joseph | inches |
 | `route[].humidity_pct` | integer \| null | Joseph | relative humidity % |
-| `summary` | string \| null | Krithika | AI forecast discussion; `null` until Week 4 |
-| `validation` | array | Ryan | review-agent findings; `[]` until Week 5 |
+| `summary` | string \| null | Krithika | Generated forecast discussion from the route table |
+| `validation` | array | Ryan | Review-agent findings |
 
 Every weather field is **nullable**: if a source is unavailable for a waypoint,
 that field is `null` rather than failing the whole request (proposal §4 —

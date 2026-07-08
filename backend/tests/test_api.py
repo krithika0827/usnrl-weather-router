@@ -38,15 +38,14 @@ def test_health():
 
 
 def test_forecast_happy_path_envelope(stub_weather):
-    """A valid route returns 200 with weather plus stubbed summary/validation."""
+    """A valid route returns 200 with weather, summary, and validation."""
     r = client.post("/api/v1/forecast", json=VALID)
     assert r.status_code == 200
     body = r.json()
     assert body["route"][0]["temperature_f"] == 70.0
-    assert body["summary"] is None      # stubbed for Krithika (Week 4)
-    assert body["validation"][0]["severity"] == "warning"
-    assert body["validation"][0]["field"] == "summary"
-    assert "Summary is missing" in body["validation"][0]["message"]
+    assert "Route guidance covers 1 waypoint" in body["summary"]
+    assert "70.0 F" in body["summary"]
+    assert body["validation"] == []
 
 def test_rejects_latitude_out_of_range():
     """Latitude outside [-90, 90] is rejected with 422."""

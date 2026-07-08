@@ -141,6 +141,7 @@ function App() {
             setWeatherData(importedRoute);
             setForecastText(importedForecastText);
             setWeatherSituationText(importedForecastText);
+            setValidationFindings(weatherContext.validation ?? []);
             setError("");
         } catch (err) {
             setError(`Could not upload JSON: ${err.message}`);
@@ -155,6 +156,7 @@ function App() {
             vehicleName,
             routeName,
             summary: forecastText,
+            validation: validationFindings,
             peakValues: {
                 temperature_f: {min: minTemp, max: maxTemp
                 },
@@ -179,17 +181,9 @@ function App() {
         };
     }
 
-    // Pass the current weather context to the AI placeholder and update the Weather Situation text.
-    function regenerateWeatherSituation() {
-        const updatedForecastText = aiPlaceHolder(buildWeatherContext());
-
-        setForecastText(updatedForecastText);
-        setWeatherSituationText(updatedForecastText);
-    }
-
-    // Dummy AI placeholder that appends "X" to the forecast summary.
-    function aiPlaceHolder(weatherContext) {
-        return `${weatherContext.summary}X`;
+    // Refresh the backend forecast so the Weather Situation uses the latest route guidance.
+    async function regenerateWeatherSituation() {
+        await runForecast();
     }
 
 
@@ -214,6 +208,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     const [weatherSituationText, setWeatherSituationText] = useState(placeHolderText);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [validationFindings, setValidationFindings] = useState([]);
     const [vehicleName, setVehicleName] = useState("Borealis");
     const [routeName, setRouteName] = useState("Kessel Run");
     const jsonUploadInputRef = useRef(null);
@@ -321,12 +316,19 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             if (!response.ok) {
                 setError(formatForecastError(data));
                 setWeatherData([]);
+                setValidationFindings([]);
                 return;
             }
             setWeatherData(data.route);
+            setValidationFindings(data.validation ?? []);
+            if (data.summary) {
+                setForecastText(data.summary);
+                setWeatherSituationText(data.summary);
+            }
         } catch (err) {
             setError(err.message);
             setWeatherData([]);
+            setValidationFindings([]);
         } finally {
             setLoading(false);
         }
@@ -767,6 +769,20 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+            {validationFindings.length > 0 && (
+                <div className="card">
+                    <div className="card-header">
+                        <h2>Validation Findings</h2>
+                    </div>
+                    <ul style={{padding: "20px", margin: 0}}>
+                        {validationFindings.map((finding, index) => (
+                            <li key={index}>
+                                <strong>{finding.severity}</strong> {finding.field}: {finding.message}
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             )}
         </div>
