@@ -202,11 +202,11 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
 // prefilled waypoints for faster testing
     const sampleWaypoints = `[
-  { "lat": 36.85, "lon": -76.30, "eta": "2026-06-08T12:00:00Z" },
-  { "lat": 36.20, "lon": -76.55, "eta": "2026-06-08T18:00:00Z" },
-  { "lat": 35.65, "lon": -76.90, "eta": "2026-06-09T00:00:00Z" },
-  { "lat": 35.10, "lon": -77.20, "eta": "2026-06-09T06:00:00Z" },
-  { "lat": 34.55, "lon": -77.45, "eta": "2026-06-09T12:00:00Z" }
+  { "lat": 36.85, "lon": -76.30, "eta": "2026-07-09T12:00:00Z" },
+  { "lat": 36.20, "lon": -76.55, "eta": "2026-07-09T18:00:00Z" },
+  { "lat": 35.65, "lon": -76.90, "eta": "2026-07-10T00:00:00Z" },
+  { "lat": 35.10, "lon": -77.20, "eta": "2026-07-10T06:00:00Z" },
+  { "lat": 34.55, "lon": -77.45, "eta": "2026-07-10T12:00:00Z" }
 ]`;
     const [waypointsText, setWaypointsText] = useState(sampleWaypoints);
     const [weatherData, setWeatherData] = useState([]);

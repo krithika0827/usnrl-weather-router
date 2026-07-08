@@ -21,14 +21,23 @@ Improved Waypoint error msg handling
 Improved comments
 Changed Site page name and icon
 Updated all mentions of "Ship" to "Vehicle"
+Added some automated front end tests
 
 In Progress
 
 To do
 Needs real AI generated Forecast Discussion text
-Need unique id that can be used in app backend to save/load routes
-Make automated front end tests
+Improve automated tests
 
 Stretch goals
 Allow users to download a PDF report
 In APP Save and load previous routes
+Need unique id that can be used in app backend to save/load routes
+
+For testing:
+ Add confirm AI text box is not blank
+ Use this to install frontend dependencies:
+  cd frontend
+  npm install
+  npx playwright install chromium
+
