@@ -1,37 +1,75 @@
 # QA critique agent / validation — Owner: Ryan
-from typing import List
+
+from typing import Any, List
 
 from app.agents.state import ValidationFinding, ValidationState
 
 
+# Initial thresholds for detecting sudden changes between waypoints.
+TEMPERATURE_SPIKE_F = 30
+WIND_SPIKE_MPH = 35
+HUMIDITY_SPIKE_PCT = 40
+PRECIPITATION_SPIKE_IN = 1.0
+
+
+def _point_to_dict(point: Any) -> dict:
+    # Converts a Pydantic waypoint into a dictionary.
+    if hasattr(point, "model_dump"):
+        return point.model_dump()
+
+    # Keeps dictionary waypoints unchanged.
+    if isinstance(point, dict):
+        return point
+
+    # Returns an empty dictionary for unsupported data.
+    return {}
+
+
+def _add_finding(
+    findings: List[ValidationFinding],
+    severity: str,
+    field: str,
+    message: str,
+) -> None:
+    # Adds one structured validation issue.
+    findings.append({
+        "severity": severity,
+        "field": field,
+        "message": message,
+    })
+
+
 def validate_summary_against_route(state: ValidationState) -> dict:
     # Gets route data from the graph state.
-    route = state.get("route", [])
+    raw_route = state.get("route", [])
 
-    # Gets AI summary from the graph state.
+    # Converts route points into dictionaries.
+    route = [_point_to_dict(point) for point in raw_route]
+
+    # Gets the AI-generated narrative summary.
     summary = state.get("summary")
 
-    # Stores all validation issues found.
+    # Stores all validation findings.
     findings: List[ValidationFinding] = []
 
     if not route:
-        # Adds an error if route data is missing.
-        findings.append({
-            "severity": "error",
-            "field": "route",
-            "message": "Route data is missing or empty."
-        })
-
-        # Returns early because there is no route to validate.
+        # Stops validation if route data is missing.
+        _add_finding(
+            findings,
+            "error",
+            "route",
+            "Route data is missing or empty.",
+        )
         return {"validation": findings}
 
     if summary is None or summary.strip() == "":
-        # Adds a warning if summary is missing.
-        findings.append({
-            "severity": "warning",
-            "field": "summary",
-            "message": "Summary is missing. Validation only checked route data."
-        })
+        # Warns when there is no narrative to compare.
+        _add_finding(
+            findings,
+            "warning",
+            "summary",
+            "Summary is missing. Only route data was validated.",
+        )
 
     required_fields = [
         "lat",
@@ -44,59 +82,337 @@ def validate_summary_against_route(state: ValidationState) -> dict:
     ]
 
     for index, point in enumerate(route):
-        # Checks each waypoint for missing fields.
+        # Reports unsupported route point values.
+        if not point:
+            _add_finding(
+                findings,
+                "error",
+                f"route[{index}]",
+                "Waypoint format is invalid or unsupported.",
+            )
+            continue
+
         for field in required_fields:
+            # Reports fields that do not exist.
             if field not in point:
-                findings.append({
-                    "severity": "error",
-                    "field": f"route[{index}].{field}",
-                    "message": f"Missing required field: {field}."
-                })
+                _add_finding(
+                    findings,
+                    "error",
+                    f"route[{index}].{field}",
+                    f"Missing required field: {field}.",
+                )
+                continue
 
-    if summary:
-        # Adds all precipitation values.
-        total_precip = sum(
-            float(point.get("precipitation_in") or 0)
-            for point in route
-        )
+            # Weather API failures may produce null metrics.
+            if field in {
+                "temperature_f",
+                "wind_speed_mph",
+                "precipitation_in",
+                "humidity_pct",
+            } and point[field] is None:
+                _add_finding(
+                    findings,
+                    "warning",
+                    f"route[{index}].{field}",
+                    f"Weather metric {field} is unavailable.",
+                )
 
-        # Words that suggest rain.
-        rain_words = ["rain", "raining", "precipitation", "showers", "storm"]
-
-        if total_precip == 0 and any(word in summary.lower() for word in rain_words):
-            # Warns if summary mentions rain but data shows no precipitation.
-            findings.append({
-                "severity": "warning",
-                "field": "summary",
-                "message": "Summary mentions rain or precipitation, but route precipitation values are 0."
-            })
-
-    for index, point in enumerate(route):
-        # Gets weather values for simple range checks.
+        lat = point.get("lat")
+        lon = point.get("lon")
         temp = point.get("temperature_f")
         wind = point.get("wind_speed_mph")
+        precipitation = point.get("precipitation_in")
         humidity = point.get("humidity_pct")
 
-        if temp is not None and (temp < -80 or temp > 140):
-            findings.append({
-                "severity": "warning",
-                "field": f"route[{index}].temperature_f",
-                "message": "Temperature value looks unrealistic."
-            })
+        # Checks valid coordinate ranges.
+        if lat is not None and not -90 <= lat <= 90:
+            _add_finding(
+                findings,
+                "error",
+                f"route[{index}].lat",
+                "Latitude must be between -90 and 90.",
+            )
 
-        if wind is not None and wind > 100:
-            findings.append({
-                "severity": "warning",
-                "field": f"route[{index}].wind_speed_mph",
-                "message": "Wind speed is very high and should be reviewed."
-            })
+        if lon is not None and not -180 <= lon <= 180:
+            _add_finding(
+                findings,
+                "error",
+                f"route[{index}].lon",
+                "Longitude must be between -180 and 180.",
+            )
 
-        if humidity is not None and (humidity < 0 or humidity > 100):
-            findings.append({
-                "severity": "error",
-                "field": f"route[{index}].humidity_pct",
-                "message": "Humidity must be between 0 and 100."
-            })
+        # Checks unrealistic temperature values.
+        if temp is not None and not -80 <= temp <= 140:
+            _add_finding(
+                findings,
+                "warning",
+                f"route[{index}].temperature_f",
+                "Temperature value looks unrealistic and should be reviewed.",
+            )
+
+        # Wind speed cannot be negative.
+        if wind is not None and wind < 0:
+            _add_finding(
+                findings,
+                "error",
+                f"route[{index}].wind_speed_mph",
+                "Wind speed cannot be negative.",
+            )
+        elif wind is not None and wind > 100:
+            _add_finding(
+                findings,
+                "warning",
+                f"route[{index}].wind_speed_mph",
+                "Wind speed is unusually high and should be reviewed.",
+            )
+
+        # Precipitation cannot be negative.
+        if precipitation is not None and precipitation < 0:
+            _add_finding(
+                findings,
+                "error",
+                f"route[{index}].precipitation_in",
+                "Precipitation cannot be negative.",
+            )
+
+        # Humidity must stay within its valid percentage range.
+        if humidity is not None and not 0 <= humidity <= 100:
+            _add_finding(
+                findings,
+                "error",
+                f"route[{index}].humidity_pct",
+                "Humidity must be between 0 and 100.",
+            )
+
+    # Collects available values for narrative comparisons.
+    temperatures = [
+        point["temperature_f"]
+        for point in route
+        if point.get("temperature_f") is not None
+    ]
+    winds = [
+        point["wind_speed_mph"]
+        for point in route
+        if point.get("wind_speed_mph") is not None
+    ]
+    precipitation_values = [
+        point["precipitation_in"]
+        for point in route
+        if point.get("precipitation_in") is not None
+    ]
+
+    if summary:
+        # Uses lowercase text for keyword comparisons.
+        summary_lower = summary.lower()
+
+        total_precipitation = sum(precipitation_values)
+        maximum_wind = max(winds) if winds else None
+        minimum_temperature = min(temperatures) if temperatures else None
+        maximum_temperature = max(temperatures) if temperatures else None
+
+        rain_words = [
+            "rain",
+            "raining",
+            "precipitation",
+            "showers",
+            "storm",
+            "wet conditions",
+        ]
+        dry_words = [
+            "dry",
+            "no rain",
+            "no precipitation",
+            "clear and dry",
+        ]
+        strong_wind_words = [
+            "strong wind",
+            "strong winds",
+            "high wind",
+            "high winds",
+            "windy",
+            "gusty",
+        ]
+        calm_wind_words = [
+            "calm",
+            "light wind",
+            "light winds",
+        ]
+        hot_words = [
+            "hot",
+            "very warm",
+            "high temperatures",
+        ]
+        cold_words = [
+            "cold",
+            "freezing",
+            "very cold",
+            "low temperatures",
+        ]
+
+        # Flags rain language when the data shows no precipitation.
+        if (
+            precipitation_values
+            and total_precipitation == 0
+            and any(word in summary_lower for word in rain_words)
+        ):
+            _add_finding(
+                findings,
+                "warning",
+                "summary",
+                "Summary mentions rain or precipitation, but route precipitation values are 0.",
+            )
+
+        # Flags dry language when precipitation is present.
+        if (
+            precipitation_values
+            and total_precipitation > 0
+            and any(word in summary_lower for word in dry_words)
+        ):
+            _add_finding(
+                findings,
+                "warning",
+                "summary",
+                "Summary describes dry conditions, but precipitation is present in the route data.",
+            )
+
+        # Flags strong-wind language when wind values are low.
+        if (
+            maximum_wind is not None
+            and maximum_wind < 20
+            and any(word in summary_lower for word in strong_wind_words)
+        ):
+            _add_finding(
+                findings,
+                "warning",
+                "summary",
+                "Summary describes strong winds, but route wind speeds remain below 20 mph.",
+            )
+
+        # Flags calm-wind language when wind values are high.
+        if (
+            maximum_wind is not None
+            and maximum_wind >= 35
+            and any(word in summary_lower for word in calm_wind_words)
+        ):
+            _add_finding(
+                findings,
+                "warning",
+                "summary",
+                "Summary describes calm or light winds, but the route contains high wind speeds.",
+            )
+
+        # Flags hot-weather language when temperatures are low.
+        if (
+            maximum_temperature is not None
+            and maximum_temperature < 70
+            and any(word in summary_lower for word in hot_words)
+        ):
+            _add_finding(
+                findings,
+                "warning",
+                "summary",
+                "Summary describes hot conditions, but route temperatures remain below 70°F.",
+            )
+
+        # Flags cold-weather language when temperatures are warm.
+        if (
+            minimum_temperature is not None
+            and minimum_temperature > 60
+            and any(word in summary_lower for word in cold_words)
+        ):
+            _add_finding(
+                findings,
+                "warning",
+                "summary",
+                "Summary describes cold conditions, but route temperatures remain above 60°F.",
+            )
+
+    # Compares consecutive waypoints for sudden changes.
+    for index in range(1, len(route)):
+        previous = route[index - 1]
+        current = route[index]
+
+        previous_temp = previous.get("temperature_f")
+        current_temp = current.get("temperature_f")
+
+        previous_wind = previous.get("wind_speed_mph")
+        current_wind = current.get("wind_speed_mph")
+
+        previous_humidity = previous.get("humidity_pct")
+        current_humidity = current.get("humidity_pct")
+
+        previous_precipitation = previous.get("precipitation_in")
+        current_precipitation = current.get("precipitation_in")
+
+        # Flags a sudden temperature change.
+        if (
+            previous_temp is not None
+            and current_temp is not None
+            and abs(current_temp - previous_temp) >= TEMPERATURE_SPIKE_F
+        ):
+            _add_finding(
+                findings,
+                "warning",
+                f"route[{index}].temperature_f",
+                (
+                    "Temperature changes by "
+                    f"{abs(current_temp - previous_temp):.1f}°F "
+                    "from the previous waypoint."
+                ),
+            )
+
+        # Flags a sudden wind-speed change.
+        if (
+            previous_wind is not None
+            and current_wind is not None
+            and abs(current_wind - previous_wind) >= WIND_SPIKE_MPH
+        ):
+            _add_finding(
+                findings,
+                "warning",
+                f"route[{index}].wind_speed_mph",
+                (
+                    "Wind speed changes by "
+                    f"{abs(current_wind - previous_wind):.1f} mph "
+                    "from the previous waypoint."
+                ),
+            )
+
+        # Flags a sudden humidity change.
+        if (
+            previous_humidity is not None
+            and current_humidity is not None
+            and abs(current_humidity - previous_humidity) >= HUMIDITY_SPIKE_PCT
+        ):
+            _add_finding(
+                findings,
+                "warning",
+                f"route[{index}].humidity_pct",
+                (
+                    "Humidity changes by "
+                    f"{abs(current_humidity - previous_humidity)} percentage points "
+                    "from the previous waypoint."
+                ),
+            )
+
+        # Flags a sudden precipitation change.
+        if (
+            previous_precipitation is not None
+            and current_precipitation is not None
+            and abs(current_precipitation - previous_precipitation)
+            >= PRECIPITATION_SPIKE_IN
+        ):
+            _add_finding(
+                findings,
+                "warning",
+                f"route[{index}].precipitation_in",
+                (
+                    "Precipitation changes by "
+                    f"{abs(current_precipitation - previous_precipitation):.2f} inches "
+                    "from the previous waypoint."
+                ),
+            )
 
     # Returns all validation findings.
     return {"validation": findings}
+
