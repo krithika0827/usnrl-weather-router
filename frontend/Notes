@@ -24,16 +24,19 @@ Updated all mentions of "Ship" to "Vehicle"
 Added some automated front end tests
 
 Improved Wind Dir display with textbox-driven arrow and compass label
-Added map wind direction arrows for each waypoint
-Moved waypoint chart to the bottom of the page
+Added map wind direction arrows for each waypoint color based on wind speed
+Moved waypoint chart to the bottom of the page (Might be better layout for large routes)
 real generated Forecast Discussion text added
+Added some general front end tests
+Pre determined weather validation test
+Improve wind direction on map display
+Accounted for missing wind data causing issues with map
 
 In Progress:
 
 To do:
 Improve automated tests
-    re-run weather test
-    Confirm Weather values are as expected
+    re-run weather test after user edit values
 
 Stretch goals:
 Allow users to download a PDF report

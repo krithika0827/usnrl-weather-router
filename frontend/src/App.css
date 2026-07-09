@@ -374,6 +374,18 @@ tbody tr:hover td {
     font-weight: 800;
 }
 
+.wind-direction-unknown {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1;
+}
+
 .wind-map-direction-icon {
     pointer-events: none;
 }
@@ -384,16 +396,46 @@ tbody tr:hover td {
     justify-content: center;
     width: 28px;
     height: 28px;
-    background: rgba(6, 15, 30, 0.88);
-    border: 2px solid var(--accent2);
-    border-radius: 50%;
-    color: var(--accent2);
-    font-size: 18px;
+    background: transparent;
+    border: 0;
+    color: #000;
+    font-size: 24px;
     font-weight: 800;
     line-height: 1;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+    text-shadow: none;
+    -webkit-text-stroke: 2px var(--accent);
     pointer-events: none;
     transform-origin: center;
+}
+
+.wind-map-direction-arrow.wind-speed-default {
+    color: #000;
+    -webkit-text-stroke-color: #1bbbe4;
+}
+
+.wind-map-direction-arrow.wind-speed-missing {
+    color: #000;
+    -webkit-text-stroke-color: #000;
+}
+
+.wind-map-direction-arrow.wind-speed-strong {
+    color: #000;
+    -webkit-text-stroke-color: #2563eb;
+}
+
+.wind-map-direction-arrow.wind-speed-extreme {
+    color: #000;
+    font-size: 26px;
+    font-weight: 900;
+    -webkit-text-stroke-color: #ff2e2e;
+}
+
+.wind-map-direction-dot {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #000;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
 }
 
 pre {
