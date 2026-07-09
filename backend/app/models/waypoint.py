@@ -17,7 +17,7 @@ class Waypoint(BaseModel):
 class RouteRequest(BaseModel):
     """An ordered list of waypoints describing a 3-7 day route."""
 
-    waypoints: list[Waypoint] = Field(..., min_length=1)
+    waypoints: list[Waypoint] = Field(..., min_length=1, max_length=50)
     vehicle_name: str | None = None
     route_name: str | None = None
 

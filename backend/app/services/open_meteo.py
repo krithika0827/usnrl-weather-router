@@ -2,7 +2,8 @@
 """Fetches real weather for each waypoint from the Open-Meteo forecast API.
 
 Open-Meteo returns native US units on request (°F, mph, inches), so no manual
-unit conversion is needed. Requests run in parallel (one per waypoint). If a
+unit conversion is needed. Requests run in parallel (one per waypoint, capped
+at _MAX_CONCURRENCY at a time). If a
 fetch fails, that waypoint's weather fields come back null rather than failing
 the whole request — graceful degradation (NOAA fallback is added in Phase 3).
 """
@@ -24,23 +25,44 @@ _HOURLY_FIELDS = (
     "precipitation,relative_humidity_2m"
 )
 
+# Cap simultaneous upstream calls. A long route (e.g. 50 waypoints) would
+# otherwise open hundreds of connections at once — exhausting httpx's pool and
+# tripping Open-Meteo / NOAA rate limits — and any unexpected error escaping a
+# single fetch would fail the whole request instead of just that waypoint.
+_MAX_CONCURRENCY = 5
+
 
 async def fetch_forecasts(waypoints: list[Waypoint]) -> list[WaypointForecast]:
     """Fetch weather for every waypoint concurrently, preserving input order."""
+    semaphore = asyncio.Semaphore(_MAX_CONCURRENCY)
     async with httpx.AsyncClient(timeout=settings.request_timeout_s) as client:
-        tasks = [_fetch_one(client, wp) for wp in waypoints]
-        return await asyncio.gather(*tasks)
+        tasks = [_fetch_one(client, semaphore, wp) for wp in waypoints]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Any waypoint whose fetch raised an unexpected error degrades to null
+    # rather than failing the whole route.
+    return [
+        result if isinstance(result, WaypointForecast) else _null_forecast(wp)
+        for wp, result in zip(waypoints, results)
+    ]
 
 
-async def _fetch_one(client: httpx.AsyncClient, wp: Waypoint) -> WaypointForecast:
+async def _fetch_one(
+    client: httpx.AsyncClient, semaphore: asyncio.Semaphore, wp: Waypoint
+) -> WaypointForecast:
     """Fetch one waypoint's weather; return null fields if the call fails."""
-    try:
-        resp = await client.get(settings.open_meteo_url, params=_params(wp))
-        resp.raise_for_status()
-        return _from_hourly(wp, resp.json())
-    except (httpx.HTTPError, KeyError, ValueError):
-        # Open-Meteo failed: fall back to NOAA (which nulls out if it can't help).
-        return await noaa.fetch_fallback(client, wp)
+    async with semaphore:
+        try:
+            resp = await client.get(settings.open_meteo_url, params=_params(wp))
+            resp.raise_for_status()
+            return _from_hourly(wp, resp.json())
+        except (httpx.HTTPError, KeyError, ValueError):
+            # Open-Meteo failed: fall back to NOAA (which nulls out if it can't help).
+            return await noaa.fetch_fallback(client, wp)
+
+
+def _null_forecast(wp: Waypoint) -> WaypointForecast:
+    """A forecast carrying the waypoint's identity but no weather data."""
+    return WaypointForecast(lat=wp.lat, lon=wp.lon, eta=wp.eta)
 
 
 def _params(wp: Waypoint) -> dict:
