@@ -382,8 +382,17 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
     // Convert a wind bearing in degrees into an arrow/cardinal readout.
     function getWindDirectionDisplay(value) {
+        if (value === null || value === undefined || value === "") {
+            return {
+                isAvailable: false,
+                label: "N/A",
+                degrees: "N/A",
+                rotation: 0
+            };
+        }
+
         const number = Number(value);
-        if (!Number.isFinite(number)) {
+        if (!Number.isFinite(number) || number < 0 || number > 360) {
             return {
                 isAvailable: false,
                 label: "N/A",
@@ -426,6 +435,44 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         if (!direction.isAvailable) return "N/A";
 
         return `${direction.label} (${direction.degrees})`;
+    }
+
+    function isMissingWindSpeed(value) {
+        return value === null || value === undefined || value === "";
+    }
+
+    function getWindMapSpeedClass(value) {
+        if (isMissingWindSpeed(value)) return "wind-speed-missing";
+
+        const speed = Number(value);
+        if (!Number.isFinite(speed)) return "wind-speed-missing";
+        if (speed >= 58) return "wind-speed-extreme";
+        if (speed >= 40 && speed < 58) return "wind-speed-strong";
+        if (speed >= 0 && speed < 40) return "wind-speed-default";
+
+        return "wind-speed-missing";
+    }
+
+    function getWindMapOutlineColor(value) {
+        if (isMissingWindSpeed(value)) {
+            return "#000";
+        }
+
+        const speed = Number(value);
+        if (!Number.isFinite(speed)) {
+            return "#000";
+        }
+        if (Number.isFinite(speed) && speed >= 58) {
+            return "#ff2e2e";
+        }
+        if (Number.isFinite(speed) && speed >= 40 && speed < 58) {
+            return "#2563eb";
+        }
+        if (Number.isFinite(speed) && speed >= 0 && speed < 40) {
+            return "#1bbbe4";
+        }
+
+        return "#000";
     }
 
     // Convert degrees to radians for distance calculations.
@@ -500,20 +547,46 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         });
     }
 
-    function createWindDirectionIcon(windDirection) {
+    function createWindDirectionIcon(windDirection, windSpeed) {
+        const speedClass = getWindMapSpeedClass(windSpeed);
+        const outlineColor = getWindMapOutlineColor(windSpeed);
+
         return L.divIcon({
             className: "wind-map-direction-icon",
             html: `
             <div
-                class="wind-map-direction-arrow"
+                class="wind-map-direction-arrow ${speedClass}"
                 title="Wind direction ${windDirection.label}"
-                style="transform: rotate(${windDirection.rotation}deg);"
+                style="
+                    color: #000;
+                    text-shadow: none;
+                    -webkit-text-stroke: 2px ${outlineColor};
+                    transform: rotate(${windDirection.rotation}deg);
+                "
             >
                 ↑
             </div>
         `,
             iconSize: [28, 28],
             iconAnchor: [14, 42]
+        });
+    }
+
+    function createWindDirectionDotIcon(windSpeed) {
+        const speedClass = getWindMapSpeedClass(windSpeed);
+        const dotColor = getWindMapOutlineColor(windSpeed);
+
+        return L.divIcon({
+            className: "wind-map-direction-icon",
+            html: `
+            <div
+                class="wind-map-direction-dot ${speedClass}"
+                title="Wind direction unavailable"
+                style="background: ${dotColor};"
+            ></div>
+        `,
+            iconSize: [15, 15],
+            iconAnchor: [7.5, 42]
         });
     }
 
@@ -602,7 +675,12 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                                 </span>
                                             </>
                                         ) : (
-                                            <span className="wind-direction-missing">N/A</span>
+                                            <span
+                                                className="wind-direction-unknown"
+                                                aria-label="Wind direction unavailable"
+                                            >
+                                                ?
+                                            </span>
                                         )}
                                     </div>
                                 </div>
@@ -786,13 +864,16 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
                             {weatherData.map((wp, index) => {
                                 const windDirection = getWindDirectionDisplay(wp.wind_direction_deg);
-                                if (!windDirection.isAvailable) return null;
 
                                 return (
                                     <Marker
                                         key={`wind-direction-${index}`}
                                         position={[wp.lat, wp.lon]}
-                                        icon={createWindDirectionIcon(windDirection)}
+                                        icon={
+                                            windDirection.isAvailable
+                                                ? createWindDirectionIcon(windDirection, wp.wind_speed_mph)
+                                                : createWindDirectionDotIcon(wp.wind_speed_mph)
+                                        }
                                         interactive={false}
                                         keyboard={false}
                                     />
