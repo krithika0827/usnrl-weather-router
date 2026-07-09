@@ -18,6 +18,8 @@ class RouteRequest(BaseModel):
     """An ordered list of waypoints describing a 3-7 day route."""
 
     waypoints: list[Waypoint] = Field(..., min_length=1)
+    vehicle_name: str | None = None
+    route_name: str | None = None
 
     @model_validator(mode="after")
     def _eta_non_decreasing(self) -> "RouteRequest":

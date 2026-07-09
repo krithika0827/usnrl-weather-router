@@ -65,14 +65,15 @@ return `null` weather rather than erroring — graceful degradation.)
 
 Full shapes and validation rules: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
 
-- **Input:** `{ "waypoints": [ { "lat", "lon", "eta" }, ... ] }` — `eta` is ISO-8601
-  UTC, waypoints in chronological order (else `422`).
+- **Input:** `{ "vehicle_name", "route_name", "waypoints": [ { "lat", "lon", "eta" }, ... ] }`
+  — names are optional; `eta` is ISO-8601 UTC, waypoints in chronological order
+  (else `422`).
 - **Output:** `{ "route": [ {lat, lon, eta, temperature_f, wind_speed_mph,
   precipitation_in, humidity_pct} ], "summary": "Route guidance covers ...",
   "validation": [ {"severity", "field", "message"} ] }`.
-- **Summary refresh:** `POST /api/v1/summary` accepts `{ "route": [...] }` from
-  the editable weather table and regenerates only `summary`/`validation` without
-  fetching new forecast values.
+- **Summary refresh:** `POST /api/v1/summary` accepts `{ "vehicle_name",
+  "route_name", "route": [...] }` from the editable weather table and
+  regenerates only `summary`/`validation` without fetching new forecast values.
 
 The response shape is stable, so frontend and validation work can rely on the
 same envelope even as the summary generator improves.

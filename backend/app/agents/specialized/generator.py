@@ -9,11 +9,16 @@ API key; it is also written in the same format an LLM prompt should produce.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Any
 
 
-def generate_weather_summary(route: list[Any]) -> str:
+def generate_weather_summary(
+    route: list[Any],
+    vehicle_name: str | None = None,
+    route_name: str | None = None,
+) -> str:
     """Generate an operational route forecast discussion."""
     points = [_point_to_dict(point) for point in route]
     points = [point for point in points if point]
@@ -41,20 +46,22 @@ def generate_weather_summary(route: list[Any]) -> str:
 
     temps = _values(available_points, "temperature_f")
     winds = _values(available_points, "wind_speed_mph")
+    wind_directions = _values(available_points, "wind_direction_deg")
     humidity = _values(available_points, "humidity_pct")
     precip = _values(available_points, "precipitation_in")
 
     start = available_points[0]
     end = available_points[-1]
     summary_parts = [
-        (
-            "Route guidance covers "
-            f"{len(points)} waypoint(s) from {_format_eta(start.get('eta'))} "
-            f"near {_format_lat_lon(start)} to {_format_eta(end.get('eta'))} "
-            f"near {_format_lat_lon(end)}."
+        _route_overview_sentence(
+            len(points),
+            start,
+            end,
+            vehicle_name,
+            route_name,
         ),
         _temperature_sentence(temps),
-        _wind_sentence(winds),
+        _wind_sentence(winds, wind_directions),
         _precipitation_sentence(precip),
         _humidity_sentence(humidity),
         _hazard_sentence(temps, winds, precip, missing_fields),
@@ -131,6 +138,40 @@ def _has_no_range(values: list[float]) -> bool:
     return abs(min(values) - max(values)) < 0.05
 
 
+def _clean_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def _route_overview_sentence(
+    waypoint_count: int,
+    start: dict,
+    end: dict,
+    vehicle_name: str | None,
+    route_name: str | None,
+) -> str:
+    vehicle = _clean_name(vehicle_name)
+    route = _clean_name(route_name)
+
+    if vehicle and route:
+        subject = f"{vehicle} on route {route}"
+    elif vehicle:
+        subject = vehicle
+    elif route:
+        subject = f"route {route}"
+    else:
+        subject = "Route guidance"
+
+    verb = "covers" if subject == "Route guidance" else "is forecast across"
+    return (
+        f"{subject} {verb} {waypoint_count} waypoint(s) from "
+        f"{_format_eta(start.get('eta'))} near {_format_lat_lon(start)} to "
+        f"{_format_eta(end.get('eta'))} near {_format_lat_lon(end)}."
+    )
+
+
 def _temperature_sentence(temps: list[float]) -> str:
     if not temps:
         return "Temperature guidance is unavailable for this route."
@@ -153,15 +194,18 @@ def _temperature_sentence(temps: list[float]) -> str:
     return f"Temperatures are expected to be {descriptor}, ranging from {_format_range(temps, 'F')}."
 
 
-def _wind_sentence(winds: list[float]) -> str:
+def _wind_sentence(winds: list[float], directions: list[float]) -> str:
     if not winds:
         return "Wind guidance is unavailable for this route."
 
     maximum = max(winds)
+    direction = _prevailing_direction(directions)
     if maximum >= 35:
         descriptor = "high winds"
     elif maximum >= 20:
         descriptor = "breezy winds"
+    elif direction:
+        descriptor = f"light {direction} winds"
     else:
         descriptor = "light winds"
 
@@ -169,6 +213,47 @@ def _wind_sentence(winds: list[float]) -> str:
         return f"Wind conditions indicate {descriptor} near {_format_range(winds, 'mph')}."
 
     return f"Wind conditions indicate {descriptor}, with speeds from {_format_range(winds, 'mph')}."
+
+
+def _prevailing_direction(directions: list[float]) -> str | None:
+    valid_directions = [
+        direction % 360
+        for direction in directions
+        if 0 <= direction <= 360
+    ]
+    if not valid_directions:
+        return None
+
+    sin_total = sum(math.sin(math.radians(direction)) for direction in valid_directions)
+    cos_total = sum(math.cos(math.radians(direction)) for direction in valid_directions)
+    if abs(sin_total) < 0.001 and abs(cos_total) < 0.001:
+        return None
+
+    average = math.degrees(math.atan2(sin_total, cos_total)) % 360
+    return _degrees_to_cardinal(average)
+
+
+def _degrees_to_cardinal(degrees: float) -> str:
+    labels = [
+        "north",
+        "north-northeast",
+        "northeast",
+        "east-northeast",
+        "east",
+        "east-southeast",
+        "southeast",
+        "south-southeast",
+        "south",
+        "south-southwest",
+        "southwest",
+        "west-southwest",
+        "west",
+        "west-northwest",
+        "northwest",
+        "north-northwest",
+    ]
+    index = int((degrees + 11.25) // 22.5) % len(labels)
+    return labels[index]
 
 
 def _precipitation_sentence(precip: list[float]) -> str:

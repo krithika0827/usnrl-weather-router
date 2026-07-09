@@ -19,7 +19,10 @@ from app.models.waypoint import Waypoint
 from app.models.weather_data import WaypointForecast
 from app.services import noaa
 
-_HOURLY_FIELDS = "temperature_2m,wind_speed_10m,precipitation,relative_humidity_2m"
+_HOURLY_FIELDS = (
+    "temperature_2m,wind_speed_10m,wind_direction_10m,"
+    "precipitation,relative_humidity_2m"
+)
 
 
 async def fetch_forecasts(waypoints: list[Waypoint]) -> list[WaypointForecast]:
@@ -66,6 +69,7 @@ def _from_hourly(wp: Waypoint, data: dict) -> WaypointForecast:
         eta=wp.eta,
         temperature_f=_at(hourly, "temperature_2m", idx),
         wind_speed_mph=_at(hourly, "wind_speed_10m", idx),
+        wind_direction_deg=_at(hourly, "wind_direction_10m", idx),
         precipitation_in=_at(hourly, "precipitation", idx),
         humidity_pct=_round_int(_at(hourly, "relative_humidity_2m", idx)),
     )

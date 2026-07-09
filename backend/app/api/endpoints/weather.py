@@ -25,6 +25,8 @@ class SummaryRequest(BaseModel):
     """Current editable route table sent by the frontend for summary refresh."""
 
     route: list[WaypointForecast]
+    vehicle_name: str | None = None
+    route_name: str | None = None
 
 
 @router.post("/forecast", response_model=ForecastResponse)
@@ -32,7 +34,11 @@ async def create_forecast(request: RouteRequest) -> ForecastResponse:
     """Validate a route and return a forecast product for each waypoint."""
     route = await open_meteo.fetch_forecasts(request.waypoints)
 
-    summary = generate_weather_summary(route)
+    summary = generate_weather_summary(
+        route,
+        vehicle_name=request.vehicle_name,
+        route_name=request.route_name,
+    )
     validation = run_validation(route, summary)
 
     return ForecastResponse(route=route, summary=summary, validation=validation)
@@ -42,7 +48,11 @@ async def create_forecast(request: RouteRequest) -> ForecastResponse:
 async def create_summary(request: SummaryRequest) -> ForecastResponse:
     """Generate a summary from already-loaded or manually edited weather data."""
     route = request.route
-    summary = generate_weather_summary(route)
+    summary = generate_weather_summary(
+        route,
+        vehicle_name=request.vehicle_name,
+        route_name=request.route_name,
+    )
     validation = run_validation(route, summary)
 
     return ForecastResponse(route=route, summary=summary, validation=validation)

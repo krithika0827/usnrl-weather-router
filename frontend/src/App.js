@@ -125,6 +125,7 @@ function App() {
                 lon: Number(wp.lon),
                 temperature_f: parseOptionalNumber(wp.temperature_f),
                 wind_speed_mph: parseOptionalNumber(wp.wind_speed_mph),
+                wind_direction_deg: parseOptionalNumber(wp.wind_direction_deg),
                 humidity_pct: parseOptionalNumber(wp.humidity_pct),
                 precipitation_in: parseOptionalNumber(wp.precipitation_in)
             }));
@@ -162,6 +163,8 @@ function App() {
                 },
                 wind_speed_mph: {min: minWind, max: maxWind
                 },
+                wind_direction_deg: {min: minWindDirection, max: maxWindDirection
+                },
                 humidity_pct: {min: minHumidity, max: maxHumidity
                 },
                 precipitation_in: {min: minPrecip, max: maxPrecip
@@ -175,6 +178,7 @@ function App() {
                 lon: wp.lon,
                 temperature_f: wp.temperature_f,
                 wind_speed_mph: wp.wind_speed_mph,
+                wind_direction_deg: wp.wind_direction_deg,
                 humidity_pct: wp.humidity_pct,
                 precipitation_in: wp.precipitation_in
             }))
@@ -197,7 +201,9 @@ function App() {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    route: weatherData
+                    route: weatherData,
+                    vehicle_name: vehicleName,
+                    route_name: routeName
                 })
             });
             const data = await response.json();
@@ -246,6 +252,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
     const {min: minTemp, max: maxTemp} = getMinMax("temperature_f");
     const {min: minWind, max: maxWind} = getMinMax("wind_speed_mph");
+    const {min: minWindDirection, max: maxWindDirection} = getMinMax("wind_direction_deg");
     const {min: minHumidity, max: maxHumidity} = getMinMax("humidity_pct");
     const {min: minPrecip, max: maxPrecip} = getMinMax("precipitation_in");
 
@@ -340,7 +347,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    waypoints: waypoints
+                    waypoints: waypoints,
+                    vehicle_name: vehicleName,
+                    route_name: routeName
                 })
             });
             const data = await response.json();
@@ -580,6 +589,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                         <th>Lon</th>
                         <th>🌡 Temp °F</th>
                         <th>💨 Wind MPH</th>
+                        <th>↗ Wind Dir °</th>
                         <th>💧 Humidity %</th>
                         <th>🌧 Precipitation</th>
                     </tr>
@@ -606,6 +616,15 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                     value={wp.wind_speed_mph ?? ""}
                                     onChange={(e) =>
                                         updateWeatherCell(index, "wind_speed_mph", e.target.value)
+                                    }
+                                />
+                            </td>
+                            <td>
+                                <input
+                                    type="number"
+                                    value={wp.wind_direction_deg ?? ""}
+                                    onChange={(e) =>
+                                        updateWeatherCell(index, "wind_direction_deg", e.target.value)
                                     }
                                 />
                             </td>
@@ -671,6 +690,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                         Temp: {wp.temperature_f ?? "N/A"} °F
                                         <br/>
                                         Wind: {wp.wind_speed_mph ?? "N/A"} mph
+                                        <br/>
+                                        Wind Dir: {wp.wind_direction_deg ?? "N/A"}°
                                         <br/>
                                         Humidity: {wp.humidity_pct ?? "N/A"}%
                                         <br/>
