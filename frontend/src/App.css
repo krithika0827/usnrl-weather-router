@@ -330,6 +330,72 @@ tbody tr:hover td {
     background: rgba(30,139,195,0.07);
 }
 
+.wind-direction-cell {
+    display: grid;
+    grid-template-columns: minmax(76px, 90px) minmax(74px, 1fr);
+    gap: 8px;
+    align-items: center;
+}
+
+.wind-direction-readout {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 74px;
+    padding: 6px 8px;
+    background: #08152a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1;
+}
+
+.wind-direction-readout.missing {
+    color: var(--text-dim);
+}
+
+.wind-direction-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--accent2);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    transform-origin: center;
+}
+
+.wind-direction-cardinal {
+    color: var(--text);
+    font-weight: 800;
+}
+
+.wind-map-direction-icon {
+    pointer-events: none;
+}
+
+.wind-map-direction-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: rgba(6, 15, 30, 0.88);
+    border: 2px solid var(--accent2);
+    border-radius: 50%;
+    color: var(--accent2);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+    pointer-events: none;
+    transform-origin: center;
+}
+
 pre {
     background: #060f1e;
     border: 1px solid var(--border);
