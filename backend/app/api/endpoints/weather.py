@@ -10,14 +10,21 @@ degrade to null on upstream failure rather than failing the whole request.
 """
 
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from app.agents.graph import run_validation
 from app.agents.specialized.generator import generate_weather_summary
 from app.models.waypoint import RouteRequest
-from app.models.weather_data import ForecastResponse
+from app.models.weather_data import ForecastResponse, WaypointForecast
 from app.services import open_meteo
 
 router = APIRouter()
+
+
+class SummaryRequest(BaseModel):
+    """Current editable route table sent by the frontend for summary refresh."""
+
+    route: list[WaypointForecast]
 
 
 @router.post("/forecast", response_model=ForecastResponse)
@@ -25,6 +32,16 @@ async def create_forecast(request: RouteRequest) -> ForecastResponse:
     """Validate a route and return a forecast product for each waypoint."""
     route = await open_meteo.fetch_forecasts(request.waypoints)
 
+    summary = generate_weather_summary(route)
+    validation = run_validation(route, summary)
+
+    return ForecastResponse(route=route, summary=summary, validation=validation)
+
+
+@router.post("/summary", response_model=ForecastResponse)
+async def create_summary(request: SummaryRequest) -> ForecastResponse:
+    """Generate a summary from already-loaded or manually edited weather data."""
+    route = request.route
     summary = generate_weather_summary(route)
     validation = run_validation(route, summary)
 

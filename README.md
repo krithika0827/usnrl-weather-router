@@ -15,6 +15,7 @@ endpoint.
 | Piece | State | Owner |
 |-------|-------|-------|
 | `POST /api/v1/forecast` — validation + real weather | ✅ working | Joseph |
+| `POST /api/v1/summary` — regenerate from edited table | ✅ working | Krithika |
 | Open-Meteo fetch (US units, async, ETA-matched) | ✅ working | Joseph |
 | NOAA fallback + graceful degradation | ✅ working | Joseph |
 | Backend tests + CI | ✅ working | Joseph |
@@ -69,6 +70,9 @@ Full shapes and validation rules: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md)
 - **Output:** `{ "route": [ {lat, lon, eta, temperature_f, wind_speed_mph,
   precipitation_in, humidity_pct} ], "summary": "Route guidance covers ...",
   "validation": [ {"severity", "field", "message"} ] }`.
+- **Summary refresh:** `POST /api/v1/summary` accepts `{ "route": [...] }` from
+  the editable weather table and regenerates only `summary`/`validation` without
+  fetching new forecast values.
 
 The response shape is stable, so frontend and validation work can rely on the
 same envelope even as the summary generator improves.

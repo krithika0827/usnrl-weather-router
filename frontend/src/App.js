@@ -181,9 +181,40 @@ function App() {
         };
     }
 
-    // Refresh the backend forecast so the Weather Situation uses the latest route guidance.
+    // Refresh only the Weather Situation using the current editable table values.
     async function regenerateWeatherSituation() {
-        await runForecast();
+        if (weatherData.length === 0) {
+            setError("Run a forecast before regenerating the Weather Situation.");
+            return;
+        }
+
+        setError("");
+        setLoading(true);
+        try {
+            const response = await fetch("http://localhost:8000/api/v1/summary", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    route: weatherData
+                })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                setError(formatForecastError(data));
+                return;
+            }
+            setValidationFindings(data.validation ?? []);
+            if (data.summary) {
+                setForecastText(data.summary);
+                setWeatherSituationText(data.summary);
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
     }
 
 

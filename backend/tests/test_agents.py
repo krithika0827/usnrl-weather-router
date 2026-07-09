@@ -157,6 +157,35 @@ def test_generator_creates_summary_from_route_data():
     assert run_validation([make_waypoint()], summary) == []
 
 
+def test_generator_uses_single_value_wording_when_there_is_no_range():
+    # Checks that identical values are not described as ranges.
+    route = [
+        make_waypoint(
+            temperature_f=1,
+            wind_speed_mph=1,
+            precipitation_in=1,
+            humidity_pct=1,
+        ),
+        make_waypoint(
+            temperature_f=1,
+            wind_speed_mph=1,
+            precipitation_in=1,
+            humidity_pct=1,
+        ),
+    ]
+
+    summary = generate_weather_summary(route)
+
+    assert "ranging from 1.0 F" not in summary
+    assert "with speeds from 1.0 mph" not in summary
+    assert "amounts from 1.00 in" not in summary
+    assert "Relative humidity ranges from 1%" not in summary
+    assert "near 1.0 F" in summary
+    assert "light winds near 1.0 mph" in summary
+    assert "amounts near 1.00 in" in summary
+    assert "Relative humidity is near 1%" in summary
+
+
 def test_generator_notes_missing_weather_data():
     # Checks graceful summary text when weather providers return null metrics.
     summary = generate_weather_summary([

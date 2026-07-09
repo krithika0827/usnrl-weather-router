@@ -47,6 +47,34 @@ def test_forecast_happy_path_envelope(stub_weather):
     assert "70.0 F" in body["summary"]
     assert body["validation"] == []
 
+
+def test_summary_uses_current_table_values_without_fetching(monkeypatch):
+    """Summary refresh uses edited route rows instead of fetching new weather."""
+    async def _fail_fetch(_waypoints):
+        raise AssertionError("summary refresh should not fetch weather")
+
+    monkeypatch.setattr("app.services.open_meteo.fetch_forecasts", _fail_fetch)
+
+    route = [{
+        "lat": 36.85,
+        "lon": -76.30,
+        "eta": "2026-06-08T12:00:00Z",
+        "temperature_f": 1.0,
+        "wind_speed_mph": 1.0,
+        "precipitation_in": 1.0,
+        "humidity_pct": 1,
+    }]
+
+    r = client.post("/api/v1/summary", json={"route": route})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["route"][0]["temperature_f"] == 1.0
+    assert "near 1.0 F" in body["summary"]
+    assert "light winds near 1.0 mph" in body["summary"]
+    assert "amounts near 1.00 in" in body["summary"]
+    assert "Relative humidity is near 1%" in body["summary"]
+
+
 def test_rejects_latitude_out_of_range():
     """Latitude outside [-90, 90] is rejected with 422."""
     bad = {"waypoints": [{"lat": 200, "lon": 0, "eta": "2026-06-08T12:00:00Z"}]}

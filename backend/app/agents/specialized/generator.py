@@ -26,7 +26,9 @@ def generate_weather_summary(route: list[Any]) -> str:
 
     missing_fields = _missing_weather_fields(points)
     available_points = [
-        point for point in points if any(_is_number(point.get(field)) for field in WEATHER_FIELDS)
+        point
+        for point in points
+        if any(_is_number(point.get(field)) for field in WEATHER_FIELDS)
     ]
 
     if not available_points:
@@ -120,9 +122,13 @@ def _format_range(values: list[float], unit: str, decimals: int = 1) -> str:
     low = min(values)
     high = max(values)
     separator = "" if unit == "%" else " "
-    if abs(low - high) < 0.05:
+    if _has_no_range(values):
         return f"{low:.{decimals}f}{separator}{unit}"
     return f"{low:.{decimals}f} to {high:.{decimals}f}{separator}{unit}"
+
+
+def _has_no_range(values: list[float]) -> bool:
+    return abs(min(values) - max(values)) < 0.05
 
 
 def _temperature_sentence(temps: list[float]) -> str:
@@ -141,10 +147,10 @@ def _temperature_sentence(temps: list[float]) -> str:
     else:
         descriptor = "mild"
 
-    return (
-        f"Temperatures are expected to be {descriptor}, ranging from "
-        f"{_format_range(temps, 'F')}."
-    )
+    if _has_no_range(temps):
+        return f"Temperatures are expected to be {descriptor} near {_format_range(temps, 'F')}."
+
+    return f"Temperatures are expected to be {descriptor}, ranging from {_format_range(temps, 'F')}."
 
 
 def _wind_sentence(winds: list[float]) -> str:
@@ -159,10 +165,10 @@ def _wind_sentence(winds: list[float]) -> str:
     else:
         descriptor = "light winds"
 
-    return (
-        f"Wind conditions indicate {descriptor}, with speeds from "
-        f"{_format_range(winds, 'mph')}."
-    )
+    if _has_no_range(winds):
+        return f"Wind conditions indicate {descriptor} near {_format_range(winds, 'mph')}."
+
+    return f"Wind conditions indicate {descriptor}, with speeds from {_format_range(winds, 'mph')}."
 
 
 def _precipitation_sentence(precip: list[float]) -> str:
@@ -179,6 +185,12 @@ def _precipitation_sentence(precip: list[float]) -> str:
     else:
         intensity = "light precipitation"
 
+    if _has_no_range(precip):
+        return (
+            f"{intensity.capitalize()} is possible along the route, with waypoint "
+            f"amounts near {_format_range(precip, 'in', decimals=2)}."
+        )
+
     return (
         f"{intensity.capitalize()} is possible along the route, with waypoint "
         f"amounts from {_format_range(precip, 'in', decimals=2)}."
@@ -188,6 +200,9 @@ def _precipitation_sentence(precip: list[float]) -> str:
 def _humidity_sentence(humidity: list[float]) -> str:
     if not humidity:
         return "Humidity guidance is unavailable for this route."
+
+    if _has_no_range(humidity):
+        return f"Relative humidity is near {_format_range(humidity, '%', decimals=0)}."
 
     return f"Relative humidity ranges from {_format_range(humidity, '%', decimals=0)}."
 

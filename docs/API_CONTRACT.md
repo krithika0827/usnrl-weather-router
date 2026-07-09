@@ -13,9 +13,12 @@ the summary generator fills `summary`, and the validation graph fills
 
 ---
 
-## Endpoint
+## Endpoints
 
 `POST /api/v1/forecast`
+
+Fetches weather for submitted waypoints, generates a summary, and validates the
+full product.
 
 ### Input
 
@@ -77,6 +80,36 @@ time of arrival (ISO 8601, UTC).
 Every weather field is **nullable**: if a source is unavailable for a waypoint,
 that field is `null` rather than failing the whole request (proposal §4 —
 "99% graceful degradation").
+
+---
+
+`POST /api/v1/summary`
+
+Regenerates only the weather situation from the current editable table values.
+This endpoint does not fetch Open-Meteo or NOAA data, so frontend edits are
+preserved.
+
+### Input
+
+```json
+{
+  "route": [
+    {
+      "lat": 36.85,
+      "lon": -76.30,
+      "eta": "2026-06-10T14:00:00Z",
+      "temperature_f": 75.4,
+      "wind_speed_mph": 11.2,
+      "precipitation_in": 0.0,
+      "humidity_pct": 65
+    }
+  ]
+}
+```
+
+### Output
+
+Uses the same `ForecastResponse` envelope as `/forecast`.
 
 ### `validation` entry shape
 
