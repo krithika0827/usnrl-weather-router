@@ -125,6 +125,7 @@ function App() {
                 lon: Number(wp.lon),
                 temperature_f: parseOptionalNumber(wp.temperature_f),
                 wind_speed_mph: parseOptionalNumber(wp.wind_speed_mph),
+                wind_direction_deg: parseOptionalNumber(wp.wind_direction_deg),
                 humidity_pct: parseOptionalNumber(wp.humidity_pct),
                 precipitation_in: parseOptionalNumber(wp.precipitation_in)
             }));
@@ -141,6 +142,7 @@ function App() {
             setWeatherData(importedRoute);
             setForecastText(importedForecastText);
             setWeatherSituationText(importedForecastText);
+            setValidationFindings(weatherContext.validation ?? []);
             setError("");
         } catch (err) {
             setError(`Could not upload JSON: ${err.message}`);
@@ -155,10 +157,13 @@ function App() {
             vehicleName,
             routeName,
             summary: forecastText,
+            validation: validationFindings,
             peakValues: {
                 temperature_f: {min: minTemp, max: maxTemp
                 },
                 wind_speed_mph: {min: minWind, max: maxWind
+                },
+                wind_direction_deg: {min: minWindDirection, max: maxWindDirection
                 },
                 humidity_pct: {min: minHumidity, max: maxHumidity
                 },
@@ -173,23 +178,49 @@ function App() {
                 lon: wp.lon,
                 temperature_f: wp.temperature_f,
                 wind_speed_mph: wp.wind_speed_mph,
+                wind_direction_deg: wp.wind_direction_deg,
                 humidity_pct: wp.humidity_pct,
                 precipitation_in: wp.precipitation_in
             }))
         };
     }
 
-    // Pass the current weather context to the AI placeholder and update the Weather Situation text.
-    function regenerateWeatherSituation() {
-        const updatedForecastText = aiPlaceHolder(buildWeatherContext());
+    // Refresh only the Weather Situation using the current editable table values.
+    async function regenerateWeatherSituation() {
+        if (weatherData.length === 0) {
+            setError("Run a forecast before regenerating the Weather Situation.");
+            return;
+        }
 
-        setForecastText(updatedForecastText);
-        setWeatherSituationText(updatedForecastText);
-    }
-
-    // Dummy AI placeholder that appends "X" to the forecast summary.
-    function aiPlaceHolder(weatherContext) {
-        return `${weatherContext.summary}X`;
+        setError("");
+        setLoading(true);
+        try {
+            const response = await fetch("http://localhost:8000/api/v1/summary", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    route: weatherData,
+                    vehicle_name: vehicleName,
+                    route_name: routeName
+                })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                setError(formatForecastError(data));
+                return;
+            }
+            setValidationFindings(data.validation ?? []);
+            if (data.summary) {
+                setForecastText(data.summary);
+                setWeatherSituationText(data.summary);
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
     }
 
 
@@ -214,12 +245,14 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     const [weatherSituationText, setWeatherSituationText] = useState(placeHolderText);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [validationFindings, setValidationFindings] = useState([]);
     const [vehicleName, setVehicleName] = useState("Borealis");
     const [routeName, setRouteName] = useState("Kessel Run");
     const jsonUploadInputRef = useRef(null);
 
     const {min: minTemp, max: maxTemp} = getMinMax("temperature_f");
     const {min: minWind, max: maxWind} = getMinMax("wind_speed_mph");
+    const {min: minWindDirection, max: maxWindDirection} = getMinMax("wind_direction_deg");
     const {min: minHumidity, max: maxHumidity} = getMinMax("humidity_pct");
     const {min: minPrecip, max: maxPrecip} = getMinMax("precipitation_in");
 
@@ -314,19 +347,28 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    waypoints: waypoints
+                    waypoints: waypoints,
+                    vehicle_name: vehicleName,
+                    route_name: routeName
                 })
             });
             const data = await response.json();
             if (!response.ok) {
                 setError(formatForecastError(data));
                 setWeatherData([]);
+                setValidationFindings([]);
                 return;
             }
             setWeatherData(data.route);
+            setValidationFindings(data.validation ?? []);
+            if (data.summary) {
+                setForecastText(data.summary);
+                setWeatherSituationText(data.summary);
+            }
         } catch (err) {
             setError(err.message);
             setWeatherData([]);
+            setValidationFindings([]);
         } finally {
             setLoading(false);
         }
@@ -547,6 +589,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                         <th>Lon</th>
                         <th>🌡 Temp °F</th>
                         <th>💨 Wind MPH</th>
+                        <th>↗ Wind Dir °</th>
                         <th>💧 Humidity %</th>
                         <th>🌧 Precipitation</th>
                     </tr>
@@ -573,6 +616,15 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                     value={wp.wind_speed_mph ?? ""}
                                     onChange={(e) =>
                                         updateWeatherCell(index, "wind_speed_mph", e.target.value)
+                                    }
+                                />
+                            </td>
+                            <td>
+                                <input
+                                    type="number"
+                                    value={wp.wind_direction_deg ?? ""}
+                                    onChange={(e) =>
+                                        updateWeatherCell(index, "wind_direction_deg", e.target.value)
                                     }
                                 />
                             </td>
@@ -638,6 +690,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                         Temp: {wp.temperature_f ?? "N/A"} °F
                                         <br/>
                                         Wind: {wp.wind_speed_mph ?? "N/A"} mph
+                                        <br/>
+                                        Wind Dir: {wp.wind_direction_deg ?? "N/A"}°
                                         <br/>
                                         Humidity: {wp.humidity_pct ?? "N/A"}%
                                         <br/>
@@ -767,6 +821,20 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+            {validationFindings.length > 0 && (
+                <div className="card">
+                    <div className="card-header">
+                        <h2>Validation Findings</h2>
+                    </div>
+                    <ul style={{padding: "20px", margin: 0}}>
+                        {validationFindings.map((finding, index) => (
+                            <li key={index}>
+                                <strong>{finding.severity}</strong> {finding.field}: {finding.message}
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             )}
         </div>

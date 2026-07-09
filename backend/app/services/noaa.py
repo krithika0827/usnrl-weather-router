@@ -52,6 +52,7 @@ def _from_periods(wp: Waypoint, periods: list[dict]) -> WaypointForecast:
         eta=wp.eta,
         temperature_f=_temp_f(period),
         wind_speed_mph=_mph(period.get("windSpeed")),
+        wind_direction_deg=_direction_deg(period.get("windDirection")),
         precipitation_in=None,  # NOAA hourly gives probability %, not an inch amount.
         humidity_pct=(period.get("relativeHumidity") or {}).get("value"),
     )
@@ -67,3 +68,29 @@ def _mph(wind_speed: str | None) -> float | None:
     """Parse NOAA's textual wind speed (e.g. '10 mph') into a number."""
     match = re.search(r"\d+", wind_speed or "")
     return float(match.group()) if match else None
+
+
+def _direction_deg(direction: str | None) -> float | None:
+    """Convert NOAA cardinal wind direction text to degrees."""
+    if direction is None:
+        return None
+
+    directions = {
+        "N": 0,
+        "NNE": 22.5,
+        "NE": 45,
+        "ENE": 67.5,
+        "E": 90,
+        "ESE": 112.5,
+        "SE": 135,
+        "SSE": 157.5,
+        "S": 180,
+        "SSW": 202.5,
+        "SW": 225,
+        "WSW": 247.5,
+        "W": 270,
+        "WNW": 292.5,
+        "NW": 315,
+        "NNW": 337.5,
+    }
+    return directions.get(direction.strip().upper())

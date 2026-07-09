@@ -3,12 +3,14 @@
 from datetime import datetime, timezone
 
 from app.agents.graph import run_validation
+from app.agents.specialized.generator import generate_weather_summary
 from app.models.weather_data import WaypointForecast
 
 
 def make_waypoint(
     temperature_f=70,
     wind_speed_mph=10,
+    wind_direction_deg=45,
     precipitation_in=0,
     humidity_pct=50,
 ):
@@ -19,6 +21,7 @@ def make_waypoint(
         eta=datetime(2026, 6, 8, 12, 0, tzinfo=timezone.utc),
         temperature_f=temperature_f,
         wind_speed_mph=wind_speed_mph,
+        wind_direction_deg=wind_direction_deg,
         precipitation_in=precipitation_in,
         humidity_pct=humidity_pct,
     )
@@ -130,3 +133,84 @@ def test_valid_route_returns_no_findings():
     )
 
     assert findings == []
+
+
+def test_generator_creates_summary_from_route_data():
+    # Checks that the summary uses the route metrics and avoids placeholder text.
+    summary = generate_weather_summary([
+        make_waypoint(
+            temperature_f=68,
+            wind_speed_mph=12,
+            precipitation_in=0,
+            humidity_pct=55,
+        ),
+        make_waypoint(
+            temperature_f=74,
+            wind_speed_mph=18,
+            precipitation_in=0,
+            humidity_pct=62,
+        ),
+    ])
+
+    assert "68.0 to 74.0 F" in summary
+    assert "northeast winds" in summary
+    assert "12.0 to 18.0 mph" in summary
+    assert "No measurable accumulation" in summary
+    assert "placeholder" not in summary.lower()
+    assert run_validation([make_waypoint()], summary) == []
+
+
+def test_generator_mentions_vehicle_and_route_names():
+    # Checks that optional frontend metadata appears in the narrative.
+    summary = generate_weather_summary(
+        [make_waypoint()],
+        vehicle_name="Borealis",
+        route_name="Kessel Run",
+    )
+
+    assert "Borealis" in summary
+    assert "Kessel Run" in summary
+
+
+def test_generator_uses_single_value_wording_when_there_is_no_range():
+    # Checks that identical values are not described as ranges.
+    route = [
+        make_waypoint(
+            temperature_f=1,
+            wind_speed_mph=1,
+            precipitation_in=1,
+            humidity_pct=1,
+        ),
+        make_waypoint(
+            temperature_f=1,
+            wind_speed_mph=1,
+            precipitation_in=1,
+            humidity_pct=1,
+        ),
+    ]
+
+    summary = generate_weather_summary(route)
+
+    assert "ranging from 1.0 F" not in summary
+    assert "with speeds from 1.0 mph" not in summary
+    assert "amounts from 1.00 in" not in summary
+    assert "Relative humidity ranges from 1%" not in summary
+    assert "near 1.0 F" in summary
+    assert "light northeast winds near 1.0 mph" in summary
+    assert "amounts near 1.00 in" in summary
+    assert "Relative humidity is near 1%" in summary
+
+
+def test_generator_notes_missing_weather_data():
+    # Checks graceful summary text when weather providers return null metrics.
+    summary = generate_weather_summary([
+        make_waypoint(
+            temperature_f=None,
+            wind_speed_mph=None,
+            wind_direction_deg=None,
+            precipitation_in=None,
+            humidity_pct=None,
+        )
+    ])
+
+    assert "no temperature, wind, humidity, or precipitation values are available" in summary

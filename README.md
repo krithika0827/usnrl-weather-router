@@ -5,9 +5,9 @@ list of coordinates + ETAs; the app returns a per-waypoint weather table, an
 AI-generated forecast summary, and automated validation findings.
 
 This repo currently has a **working deterministic backend** (real weather, input
-validation, graceful degradation). The AI summary is still stubbed behind the
-frozen API contract, while the validation workflow is now integrated and returns
-validation findings through the forecast endpoint.
+validation, graceful degradation), a generated route weather summary, and an
+integrated validation workflow that returns findings through the forecast
+endpoint.
 
 
 ## Status
@@ -15,15 +15,16 @@ validation findings through the forecast endpoint.
 | Piece | State | Owner |
 |-------|-------|-------|
 | `POST /api/v1/forecast` — validation + real weather | ✅ working | Joseph |
+| `POST /api/v1/summary` — regenerate from edited table | ✅ working | Krithika |
 | Open-Meteo fetch (US units, async, ETA-matched) | ✅ working | Joseph |
 | NOAA fallback + graceful degradation | ✅ working | Joseph |
 | Backend tests + CI | ✅ working | Joseph |
-| `summary` (AI forecast discussion) | ⏸️ stubbed `null` | Krithika |
+| `summary` (AI forecast discussion) | ✅ generated | Krithika |
 | `validation` (review-agent findings) | ✅ integrated | Ryan |
 | Frontend map | ✅ working | Reece |
 | Frontend table | ✅ working | Reece |
 | Frontend table ranges | ✅ working | Reece |
-| Frontend forecast box | ⏸️ placeholder | Reece |
+| Frontend forecast box | ✅ displays backend summary | Reece |
 
 ## Quickstart
 
@@ -37,7 +38,8 @@ For front-end testing: navigate to http://localhost:3000/ to access the beta fro
 
 The following features are currently functional: User input, Weather table, Display value range, Map display.
 
-The AI-generated weather report currently contains placeholder text.
+The weather report is generated from the backend route weather data and remains
+editable in the frontend.
 
 ----------------------------------------------------------------------------------------------------
 
@@ -63,14 +65,18 @@ return `null` weather rather than erroring — graceful degradation.)
 
 Full shapes and validation rules: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
 
-- **Input:** `{ "waypoints": [ { "lat", "lon", "eta" }, ... ] }` — `eta` is ISO-8601
-  UTC, waypoints in chronological order (else `422`).
+- **Input:** `{ "vehicle_name", "route_name", "waypoints": [ { "lat", "lon", "eta" }, ... ] }`
+  — names are optional; `eta` is ISO-8601 UTC, waypoints in chronological order
+  (else `422`).
 - **Output:** `{ "route": [ {lat, lon, eta, temperature_f, wind_speed_mph,
-  precipitation_in, humidity_pct} ], "summary": null, "validation": [ {"severity",
-  "field", "message"]}`.
+  precipitation_in, humidity_pct} ], "summary": "Route guidance covers ...",
+  "validation": [ {"severity", "field", "message"} ] }`.
+- **Summary refresh:** `POST /api/v1/summary` accepts `{ "vehicle_name",
+  "route_name", "route": [...] }` from the editable weather table and
+  regenerates only `summary`/`validation` without fetching new forecast values.
 
-The response **shape is final** — only the stubbed `summary`/`validation` get
-filled in later, so anything built against it now won't need rework.
+The response shape is stable, so frontend and validation work can rely on the
+same envelope even as the summary generator improves.
 
 ## Getting started by lane
 
@@ -89,8 +95,8 @@ works, then branch off `main` for your part (one reviewer approves before merge)
 **Krithika — AI summary**
 1. Hit the endpoint to pull real `route` JSON.
 2. Design the prompt that turns that weather table into the `summary` discussion,
-   in `backend/app/agents/specialized/generator.py` (LLM key via `.env`).
-3. Iterate standalone (route in → summary text out) before wiring into the endpoint.
+   in `backend/app/agents/specialized/generator.py`.
+3. Keep the generator output consistent with Ryan's validation checks.
 
 **Ryan — validation agents**
 1. Build the LangGraph flow in `backend/app/agents/` (`graph.py`, `state.py`,
@@ -99,8 +105,9 @@ works, then branch off `main` for your part (one reviewer approves before merge)
    `message`, per the contract).
 3. Start against a sample `route`+`summary` payload until the summary firms up.
 
-**Integration seam:** `backend/app/api/endpoints/weather.py` currently hardcodes
-`summary=None` / `validation=[]`. As Krithika's and Ryan's modules land, those two lines get swapped to call their code (Joseph wires this in).
+**Integration:** `backend/app/api/endpoints/weather.py` calls Krithika's summary
+generator, then passes the generated text and route table into Ryan's validation
+graph.
 
 ## Backend layout (`backend/app/`)
 

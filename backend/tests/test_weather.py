@@ -22,6 +22,7 @@ _OPEN_METEO_OK = {
         "time": ["2026-06-08T11:00", "2026-06-08T12:00", "2026-06-08T13:00"],
         "temperature_2m": [69.0, 70.9, 72.0],
         "wind_speed_10m": [12.0, 13.0, 14.0],
+        "wind_direction_10m": [30.0, 45.0, 60.0],
         "precipitation": [0.0, 0.0, 0.1],
         "relative_humidity_2m": [70, 67, 65],
     }
@@ -30,7 +31,7 @@ _OPEN_METEO_OK = {
 _NOAA_POINTS = {"properties": {"forecastHourly": "https://api.weather.gov/hourly/test"}}
 _NOAA_HOURLY = {"properties": {"periods": [
     {"startTime": "2026-06-08T12:00:00+00:00", "temperature": 72, "temperatureUnit": "F",
-     "windSpeed": "10 mph", "relativeHumidity": {"value": 55}},
+     "windSpeed": "10 mph", "windDirection": "NE", "relativeHumidity": {"value": 55}},
 ]}}
 
 
@@ -46,6 +47,7 @@ def test_open_meteo_maps_eta_hour_in_us_units():
     [wx] = _run([WP])
     assert wx.temperature_f == 70.9   # the 12:00 ETA hour, not 11:00 / 13:00
     assert wx.wind_speed_mph == 13.0
+    assert wx.wind_direction_deg == 45.0
     assert wx.precipitation_in == 0.0
     assert wx.humidity_pct == 67
 
@@ -61,6 +63,7 @@ def test_falls_back_to_noaa_when_open_meteo_fails():
     [wx] = _run([WP])
     assert wx.temperature_f == 72.0
     assert wx.wind_speed_mph == 10.0
+    assert wx.wind_direction_deg == 45
     assert wx.humidity_pct == 55
     assert wx.precipitation_in is None
 
@@ -72,7 +75,8 @@ def test_both_upstreams_down_degrades_to_null():
     respx.get(url__regex=r"https://api\.weather\.gov/.*").mock(side_effect=httpx.ConnectError("down"))
     [wx] = _run([WP])
     assert wx.temperature_f is None and wx.wind_speed_mph is None
-    assert wx.humidity_pct is None and wx.precipitation_in is None
+    assert wx.wind_direction_deg is None and wx.humidity_pct is None
+    assert wx.precipitation_in is None
     assert wx.lat == WP.lat and wx.eta == WP.eta   # waypoint identity preserved
 
 

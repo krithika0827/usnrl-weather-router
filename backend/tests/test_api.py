@@ -14,7 +14,11 @@ from app.models.weather_data import WaypointForecast
 
 client = TestClient(app)
 
-VALID = {"waypoints": [{"lat": 36.85, "lon": -76.30, "eta": "2026-06-08T12:00:00Z"}]}
+VALID = {
+    "vehicle_name": "Borealis",
+    "route_name": "Kessel Run",
+    "waypoints": [{"lat": 36.85, "lon": -76.30, "eta": "2026-06-08T12:00:00Z"}],
+}
 
 
 @pytest.fixture
@@ -25,6 +29,7 @@ def stub_weather(monkeypatch):
             WaypointForecast(
                 lat=wp.lat, lon=wp.lon, eta=wp.eta,
                 temperature_f=70.0, wind_speed_mph=8.0,
+                wind_direction_deg=45.0,
                 precipitation_in=0.0, humidity_pct=60,
             )
             for wp in waypoints
@@ -38,15 +43,53 @@ def test_health():
 
 
 def test_forecast_happy_path_envelope(stub_weather):
-    """A valid route returns 200 with weather plus stubbed summary/validation."""
+    """A valid route returns 200 with weather, summary, and validation."""
     r = client.post("/api/v1/forecast", json=VALID)
     assert r.status_code == 200
     body = r.json()
     assert body["route"][0]["temperature_f"] == 70.0
-    assert body["summary"] is None      # stubbed for Krithika (Week 4)
-    assert body["validation"][0]["severity"] == "warning"
-    assert body["validation"][0]["field"] == "summary"
-    assert "Summary is missing" in body["validation"][0]["message"]
+    assert "Borealis" in body["summary"]
+    assert "Kessel Run" in body["summary"]
+    assert "70.0 F" in body["summary"]
+    assert body["validation"] == []
+
+
+def test_summary_uses_current_table_values_without_fetching(monkeypatch):
+    """Summary refresh uses edited route rows instead of fetching new weather."""
+    async def _fail_fetch(_waypoints):
+        raise AssertionError("summary refresh should not fetch weather")
+
+    monkeypatch.setattr("app.services.open_meteo.fetch_forecasts", _fail_fetch)
+
+    route = [{
+        "lat": 36.85,
+        "lon": -76.30,
+        "eta": "2026-06-08T12:00:00Z",
+        "temperature_f": 1.0,
+        "wind_speed_mph": 1.0,
+        "wind_direction_deg": 45.0,
+        "precipitation_in": 1.0,
+        "humidity_pct": 1,
+    }]
+
+    r = client.post(
+        "/api/v1/summary",
+        json={
+            "vehicle_name": "Borealis",
+            "route_name": "Kessel Run",
+            "route": route,
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["route"][0]["temperature_f"] == 1.0
+    assert "Borealis" in body["summary"]
+    assert "Kessel Run" in body["summary"]
+    assert "near 1.0 F" in body["summary"]
+    assert "light northeast winds near 1.0 mph" in body["summary"]
+    assert "amounts near 1.00 in" in body["summary"]
+    assert "Relative humidity is near 1%" in body["summary"]
+
 
 def test_rejects_latitude_out_of_range():
     """Latitude outside [-90, 90] is rejected with 422."""

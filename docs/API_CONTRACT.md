@@ -7,16 +7,18 @@ This is the single shape every lane builds against:
 - **Krithika (AI)** generates `summary` *from* the `route` table.
 - **Ryan (agents)** fills `validation` by checking `summary` against `route`.
 
-Because the AI fields are stubbed (`summary: null`, `validation: []`), the
-deterministic pipeline ships first and the AI/agent work bolts on later
-**without changing this contract**. That's what lets the four of us proceed in
-parallel today.
+The response envelope is stable: deterministic weather retrieval fills `route`,
+the summary generator fills `summary`, and the validation graph fills
+`validation`.
 
 ---
 
-## Endpoint
+## Endpoints
 
 `POST /api/v1/forecast`
+
+Fetches weather for submitted waypoints, generates a summary, and validates the
+full product.
 
 ### Input
 
@@ -25,6 +27,8 @@ time of arrival (ISO 8601, UTC).
 
 ```json
 {
+  "vehicle_name": "Borealis",
+  "route_name": "Kessel Run",
   "waypoints": [
     { "lat": 36.85, "lon": -76.30, "eta": "2026-06-10T14:00:00Z" },
     { "lat": 35.22, "lon": -75.55, "eta": "2026-06-10T20:00:00Z" },
@@ -54,11 +58,12 @@ time of arrival (ISO 8601, UTC).
       "eta": "2026-06-10T14:00:00Z",
       "temperature_f": 75.4,
       "wind_speed_mph": 11.2,
+      "wind_direction_deg": 45.0,
       "precipitation_in": 0.0,
       "humidity_pct": 65
     }
   ],
-  "summary": null,
+  "summary": "Borealis on route Kessel Run is forecast across 1 waypoint(s) from 2026-06-10 14:00 UTC near 36.85, -76.30 to 2026-06-10 14:00 UTC near 36.85, -76.30. Temperatures are expected to be mild near 75.4 F. Wind conditions indicate light northeast winds near 11.2 mph. No measurable accumulation is indicated at the route waypoints. Relative humidity is near 65%. Overall operational weather risk appears limited based on the provided metrics.",
   "validation": []
 }
 ```
@@ -70,14 +75,48 @@ time of arrival (ISO 8601, UTC).
 | `route[].lat/lon/eta` | echo of input | Joseph | identifies the waypoint |
 | `route[].temperature_f` | number \| null | Joseph | Fahrenheit (°F) |
 | `route[].wind_speed_mph` | number \| null | Joseph | miles per hour |
+| `route[].wind_direction_deg` | number \| null | Joseph | wind direction in degrees |
 | `route[].precipitation_in` | number \| null | Joseph | inches |
 | `route[].humidity_pct` | integer \| null | Joseph | relative humidity % |
-| `summary` | string \| null | Krithika | AI forecast discussion; `null` until Week 4 |
-| `validation` | array | Ryan | review-agent findings; `[]` until Week 5 |
+| `summary` | string \| null | Krithika | Generated forecast discussion from the route table |
+| `validation` | array | Ryan | Review-agent findings |
 
 Every weather field is **nullable**: if a source is unavailable for a waypoint,
 that field is `null` rather than failing the whole request (proposal §4 —
 "99% graceful degradation").
+
+---
+
+`POST /api/v1/summary`
+
+Regenerates only the weather situation from the current editable table values.
+This endpoint does not fetch Open-Meteo or NOAA data, so frontend edits are
+preserved.
+
+### Input
+
+```json
+{
+  "vehicle_name": "Borealis",
+  "route_name": "Kessel Run",
+  "route": [
+    {
+      "lat": 36.85,
+      "lon": -76.30,
+      "eta": "2026-06-10T14:00:00Z",
+      "temperature_f": 75.4,
+      "wind_speed_mph": 11.2,
+      "wind_direction_deg": 45.0,
+      "precipitation_in": 0.0,
+      "humidity_pct": 65
+    }
+  ]
+}
+```
+
+### Output
+
+Uses the same `ForecastResponse` envelope as `/forecast`.
 
 ### `validation` entry shape
 

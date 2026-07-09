@@ -1,7 +1,8 @@
 # Structured tabular schemas — Owner: Joseph
 """Output schemas. Source of truth for the *output* half of docs/API_CONTRACT.md.
 
-Units are US standard: temperature °F, wind mph, precipitation inches, humidity %.
+Units are US standard: temperature °F, wind mph/degrees, precipitation inches,
+humidity %.
 This is the shape Reece renders, Krithika summarizes, and Ryan validates.
 """
 
@@ -22,6 +23,7 @@ class WaypointForecast(BaseModel):
 
     temperature_f: Optional[float] = None
     wind_speed_mph: Optional[float] = None
+    wind_direction_deg: Optional[float] = None
     precipitation_in: Optional[float] = None
     humidity_pct: Optional[int] = None
 
