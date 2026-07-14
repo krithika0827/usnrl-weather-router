@@ -330,6 +330,116 @@ tbody tr:hover td {
     background: rgba(30,139,195,0.07);
 }
 
+.wind-direction-cell {
+    display: grid;
+    grid-template-columns: minmax(76px, 90px) minmax(74px, 1fr);
+    gap: 8px;
+    align-items: center;
+}
+
+.wind-direction-readout {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 74px;
+    padding: 6px 8px;
+    background: #08152a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1;
+}
+
+.wind-direction-readout.missing {
+    color: var(--text-dim);
+}
+
+.wind-direction-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--accent2);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    transform-origin: center;
+}
+
+.wind-direction-cardinal {
+    color: var(--text);
+    font-weight: 800;
+}
+
+.wind-direction-unknown {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 2px;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.wind-map-direction-icon {
+    pointer-events: none;
+}
+
+.wind-map-direction-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: 0;
+    color: #000;
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1;
+    text-shadow: none;
+    -webkit-text-stroke: 2px var(--accent);
+    pointer-events: none;
+    transform-origin: center;
+}
+
+.wind-map-direction-arrow.wind-speed-default {
+    color: #000;
+    -webkit-text-stroke-color: #1bbbe4;
+}
+
+.wind-map-direction-arrow.wind-speed-missing {
+    color: #000;
+    -webkit-text-stroke-color: #000;
+}
+
+.wind-map-direction-arrow.wind-speed-strong {
+    color: #000;
+    -webkit-text-stroke-color: #2563eb;
+}
+
+.wind-map-direction-arrow.wind-speed-extreme {
+    color: #000;
+    font-size: 26px;
+    font-weight: 900;
+    -webkit-text-stroke-color: #ff2e2e;
+}
+
+.wind-map-direction-dot {
+    width: 15px;
+    height: 15px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    background: #000;
+    border: 2px solid #000;
+}
+
 pre {
     background: #060f1e;
     border: 1px solid var(--border);

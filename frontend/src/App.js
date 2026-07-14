@@ -380,6 +380,164 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         return min === max ? `${min}` : `${min} - ${max}`;
     };
 
+    // Convert a source wind bearing into the travel direction arrow/cardinal readout.
+    function getWindDirectionDisplay(value) {
+        if (value === null || value === undefined || value === "") {
+            return {
+                isAvailable: false,
+                label: "N/A",
+                degrees: "N/A",
+                rotation: 0
+            };
+        }
+
+        const number = Number(value);
+        if (!Number.isFinite(number) || number < 0 || number > 360) {
+            return {
+                isAvailable: false,
+                label: "N/A",
+                degrees: "N/A",
+                rotation: 0
+            };
+        }
+
+        const normalized =
+            number === 0
+                ? 0
+                : (((number + 180) % 360) + 360) % 360;
+        const labels = [
+            "N",
+            "NNE",
+            "NE",
+            "ENE",
+            "E",
+            "ESE",
+            "SE",
+            "SSE",
+            "S",
+            "SSW",
+            "SW",
+            "WSW",
+            "W",
+            "WNW",
+            "NW",
+            "NNW"
+        ];
+        const label = labels[Math.round(normalized / 22.5) % labels.length];
+
+        return {
+            isAvailable: true,
+            label,
+            degrees: `${Math.round(normalized)}°`,
+            rotation: normalized
+        };
+    }
+
+    function formatWindDirection(value) {
+        const direction = getWindDirectionDisplay(value);
+        if (!direction.isAvailable) return "N/A";
+
+        return `${direction.label} (${direction.degrees})`;
+    }
+
+    function shouldShowWindDirectionReadoutAsNA(value) {
+        return value === null || value === undefined || value === "" || isZeroWindValue(value);
+    }
+
+    function isMissingWindSpeed(value) {
+        return value === null || value === undefined || value === "";
+    }
+
+    function getWindMapSpeedClass(value) {
+        if (isMissingWindSpeed(value)) return "wind-speed-missing";
+
+        const speed = Number(value);
+        if (!Number.isFinite(speed)) return "wind-speed-missing";
+        if (speed >= 58) return "wind-speed-extreme";
+        if (speed >= 40 && speed < 58) return "wind-speed-strong";
+        if (speed >= 0 && speed < 40) return "wind-speed-default";
+
+        return "wind-speed-missing";
+    }
+
+    function getWindMapOutlineColor(value) {
+        if (isMissingWindSpeed(value)) {
+            return "#000";
+        }
+
+        const speed = Number(value);
+        if (!Number.isFinite(speed)) {
+            return "#000";
+        }
+        if (Number.isFinite(speed) && speed >= 58) {
+            return "#ff2e2e";
+        }
+        if (Number.isFinite(speed) && speed >= 40 && speed < 58) {
+            return "#2563eb";
+        }
+        if (Number.isFinite(speed) && speed >= 0 && speed < 40) {
+            return "#1bbbe4";
+        }
+
+        return "#000";
+    }
+
+    function isZeroWindValue(value) {
+        if (value === null || value === undefined || value === "") {
+            return false;
+        }
+
+        const number = Number(value);
+        return Number.isFinite(number) && number === 0;
+    }
+
+    function isAbsentWindSpeedForMap(value) {
+        if (isMissingWindSpeed(value)) {
+            return true;
+        }
+
+        const number = Number(value);
+        return !Number.isFinite(number) || number === 0;
+    }
+
+    function isAbsentWindDirectionForMap(value) {
+        if (isZeroWindValue(value)) {
+            return true;
+        }
+
+        return !getWindDirectionDisplay(value).isAvailable;
+    }
+
+    function shouldHideWindMapMarker(windSpeed, windDirection) {
+        return (
+            isAbsentWindSpeedForMap(windSpeed) &&
+            isAbsentWindDirectionForMap(windDirection)
+        );
+    }
+
+    function shouldUseWindMapDot(windSpeed, windDirection) {
+        return (
+            !isAbsentWindSpeedForMap(windSpeed) &&
+            isAbsentWindDirectionForMap(windDirection)
+        );
+    }
+
+    function getWindMapArrowClass(windSpeed) {
+        if (isAbsentWindSpeedForMap(windSpeed)) {
+            return "wind-speed-missing";
+        }
+
+        return getWindMapSpeedClass(windSpeed);
+    }
+
+    function getWindMapArrowOutlineColor(windSpeed) {
+        if (isAbsentWindSpeedForMap(windSpeed)) {
+            return "#000";
+        }
+
+        return getWindMapOutlineColor(windSpeed);
+    }
+
     // Convert degrees to radians for distance calculations.
     function toRadians(degrees) {
         return degrees * (Math.PI / 180);
@@ -450,6 +608,174 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             iconSize: [30, 30],
             iconAnchor: [15, 15]
         });
+    }
+
+    function createWindDirectionIcon(windDirection, windSpeed) {
+        const speedClass = getWindMapArrowClass(windSpeed);
+        const outlineColor = getWindMapArrowOutlineColor(windSpeed);
+
+        return L.divIcon({
+            className: "wind-map-direction-icon",
+            html: `
+            <div
+                class="wind-map-direction-arrow ${speedClass}"
+                title="Wind direction ${windDirection.label}"
+                style="
+                    color: #000;
+                    text-shadow: none;
+                    -webkit-text-stroke: 2px ${outlineColor};
+                    transform: rotate(${windDirection.rotation}deg);
+                "
+            >
+                ↑
+            </div>
+        `,
+            iconSize: [28, 28],
+            iconAnchor: [14, 42]
+        });
+    }
+
+    function createWindDirectionDotIcon(windSpeed) {
+        const speedClass = getWindMapSpeedClass(windSpeed);
+        const dotColor = getWindMapOutlineColor(windSpeed);
+
+        return L.divIcon({
+            className: "wind-map-direction-icon",
+            html: `
+            <div
+                class="wind-map-direction-dot ${speedClass}"
+                title="Wind direction unavailable"
+                style="background: ${dotColor};"
+            ></div>
+        `,
+            iconSize: [15, 15],
+            iconAnchor: [7.5, 42]
+        });
+    }
+
+    function renderWaypointsWeatherTable() {
+        if (weatherData.length === 0) return null;
+
+        return (
+            <table border="1" cellPadding="8">
+                <thead>
+                <tr>
+                    <th>Waypoint #</th>
+                    <th>ETA</th>
+                    <th>Lat</th>
+                    <th>Lon</th>
+                    <th>🌡 Temp °F</th>
+                    <th>💨 Wind MPH</th>
+                    <th>↗ Wind Dir °</th>
+                    <th>💧 Humidity %</th>
+                    <th>🌧 Precipitation</th>
+                </tr>
+                </thead>
+                <tbody>
+                {weatherData.map((wp, index) => {
+                    const windDirection = getWindDirectionDisplay(wp.wind_direction_deg);
+                    const showWindDirectionReadoutAsNA = shouldShowWindDirectionReadoutAsNA(
+                        wp.wind_direction_deg
+                    );
+                    const showWindDirectionArrow = windDirection.isAvailable && !showWindDirectionReadoutAsNA;
+
+                    return (
+                        <tr key={index}>
+                            <td>WP-{index + 1}</td>
+                            <td>{wp.eta}</td>
+                            <td>{wp.lat}</td>
+                            <td>{wp.lon}</td>
+                            <td>
+                                <input
+                                    type="number"
+                                    value={wp.temperature_f ?? ""}
+                                    onChange={(e) =>
+                                        updateWeatherCell(index, "temperature_f", e.target.value)
+                                    }
+                                />
+                            </td>
+                            <td>
+                                <input
+                                    type="number"
+                                    value={wp.wind_speed_mph ?? ""}
+                                    onChange={(e) =>
+                                        updateWeatherCell(index, "wind_speed_mph", e.target.value)
+                                    }
+                                />
+                            </td>
+                            <td>
+                                <div className="wind-direction-cell">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="360"
+                                        step="1"
+                                        value={wp.wind_direction_deg ?? ""}
+                                        aria-label={`Wind direction for waypoint ${index + 1}`}
+                                        onChange={(e) =>
+                                            updateWeatherCell(index, "wind_direction_deg", e.target.value)
+                                        }
+                                    />
+                                    <div
+                                        className={`wind-direction-readout ${
+                                            showWindDirectionArrow ? "" : "missing"
+                                        }`}
+                                        title={
+                                            showWindDirectionArrow
+                                                ? `Wind direction ${windDirection.label}`
+                                                : "Wind direction unavailable"
+                                        }
+                                    >
+                                        {showWindDirectionArrow ? (
+                                            <>
+                                                <span
+                                                    className="wind-direction-arrow"
+                                                    style={{
+                                                        transform: `rotate(${windDirection.rotation}deg)`
+                                                    }}
+                                                    aria-hidden="true"
+                                                >
+                                                    ↑
+                                                </span>
+                                                <span className="wind-direction-cardinal">
+                                                    {windDirection.label}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span
+                                                className="wind-direction-unknown"
+                                                aria-label="Wind direction unavailable"
+                                            >
+                                                {showWindDirectionReadoutAsNA ? "N/A" : "?"}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <input
+                                    type="number"
+                                    value={wp.humidity_pct ?? ""}
+                                    onChange={(e) =>
+                                        updateWeatherCell(index, "humidity_pct", e.target.value)
+                                    }
+                                />
+                            </td>
+                            <td>
+                                <input
+                                    type="number"
+                                    value={wp.precipitation_in ?? ""}
+                                    onChange={(e) =>
+                                        updateWeatherCell(index, "precipitation_in", e.target.value)
+                                    }
+                                />
+                            </td>
+                        </tr>
+                    );
+                })}
+                </tbody>
+            </table>
+        );
     }
 
     return (
@@ -578,79 +904,6 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         </pre>
             )}
 
-            {/* Waypoints Weather Table */}
-            {weatherData.length > 0 && (
-                <table border="1" cellPadding="8">
-                    <thead>
-                    <tr>
-                        <th>Waypoint #</th>
-                        <th>ETA</th>
-                        <th>Lat</th>
-                        <th>Lon</th>
-                        <th>🌡 Temp °F</th>
-                        <th>💨 Wind MPH</th>
-                        <th>↗ Wind Dir °</th>
-                        <th>💧 Humidity %</th>
-                        <th>🌧 Precipitation</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {weatherData.map((wp, index) => (
-                        <tr key={index}>
-                            <td>WP-{index + 1}</td>
-                            <td>{wp.eta}</td>
-                            <td>{wp.lat}</td>
-                            <td>{wp.lon}</td>
-                            <td>
-                                <input
-                                    type="number"
-                                    value={wp.temperature_f ?? ""}
-                                    onChange={(e) =>
-                                        updateWeatherCell(index, "temperature_f", e.target.value)
-                                    }
-                                />
-                            </td>
-                            <td>
-                                <input
-                                    type="number"
-                                    value={wp.wind_speed_mph ?? ""}
-                                    onChange={(e) =>
-                                        updateWeatherCell(index, "wind_speed_mph", e.target.value)
-                                    }
-                                />
-                            </td>
-                            <td>
-                                <input
-                                    type="number"
-                                    value={wp.wind_direction_deg ?? ""}
-                                    onChange={(e) =>
-                                        updateWeatherCell(index, "wind_direction_deg", e.target.value)
-                                    }
-                                />
-                            </td>
-                            <td>
-                                <input
-                                    type="number"
-                                    value={wp.humidity_pct ?? ""}
-                                    onChange={(e) =>
-                                        updateWeatherCell(index, "humidity_pct", e.target.value)
-                                    }
-                                />
-                            </td>
-                            <td>
-                                <input
-                                    type="number"
-                                    value={wp.precipitation_in ?? ""}
-                                    onChange={(e) =>
-                                        updateWeatherCell(index, "precipitation_in", e.target.value)
-                                    }
-                                />
-                            </td>
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
-            )}
             {weatherData.length > 0 && (
                 <div className="map-row">
                     <div className="card">
@@ -676,6 +929,28 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                 color="#26c6da"
                             />
 
+                            {weatherData.map((wp, index) => {
+                                const windDirection = getWindDirectionDisplay(wp.wind_direction_deg);
+
+                                if (shouldHideWindMapMarker(wp.wind_speed_mph, wp.wind_direction_deg)) {
+                                    return null;
+                                }
+
+                                return (
+                                    <Marker
+                                        key={`wind-direction-${index}`}
+                                        position={[wp.lat, wp.lon]}
+                                        icon={
+                                            shouldUseWindMapDot(wp.wind_speed_mph, wp.wind_direction_deg)
+                                                ? createWindDirectionDotIcon(wp.wind_speed_mph)
+                                                : createWindDirectionIcon(windDirection, wp.wind_speed_mph)
+                                        }
+                                        interactive={false}
+                                        keyboard={false}
+                                    />
+                                );
+                            })}
+
                             {weatherData.map((wp, index) => (
                                 <Marker
                                     key={index}
@@ -691,7 +966,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                         <br/>
                                         Wind: {wp.wind_speed_mph ?? "N/A"} mph
                                         <br/>
-                                        Wind Dir: {wp.wind_direction_deg ?? "N/A"}°
+                                        Wind Dir: {formatWindDirection(wp.wind_direction_deg)}
                                         <br/>
                                         Humidity: {wp.humidity_pct ?? "N/A"}%
                                         <br/>
@@ -837,6 +1112,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     </ul>
                 </div>
             )}
+            {/* Waypoints Weather Table */}
+            {renderWaypointsWeatherTable()}
         </div>
     );
 }

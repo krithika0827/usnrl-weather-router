@@ -1,4 +1,4 @@
-Done
+Done:
 Basic App page set up
 Accepts coordinates
 Returns real weather chart info
@@ -23,20 +23,30 @@ Changed Site page name and icon
 Updated all mentions of "Ship" to "Vehicle"
 Added some automated front end tests
 
-In Progress
+Improved Wind Dir display with textbox-driven arrow and compass label
+Added map wind direction arrows for each waypoint color based on wind speed
+Moved waypoint chart to the bottom of the page (Might be better layout for large routes)
+real generated Forecast Discussion text added
+Added some general front end tests
+Pre determined weather validation test
+Improve wind direction on map display
+Accounted for missing wind data causing issues with map
+-
+Flipped wind arrows to point to wind direction instead of wind source
+Added more special cases to account for missing/0 Wind MPH and Wind Dir
 
-To do
-Needs real AI generated Forecast Discussion text
+In Progress:
+
+To do:
 Improve automated tests
+    re-run weather test after user edit values
 
-Stretch goals
+Stretch goals:
 Allow users to download a PDF report
 In APP Save and load previous routes
 Need unique id that can be used in app backend to save/load routes
 
-For testing:
- Add confirm AI text box is not blank
- Use this to install frontend dependencies:
+ For testing use this to install frontend dependencies:
   cd frontend
   npm install
   npx playwright install chromium
