@@ -308,7 +308,7 @@ test("Wind map arrows use speed outlines", async ({ page }) => {
       lon: -77.20,
       eta: "2026-07-10T06:00:00Z",
       temperature_f: 75,
-      wind_speed_mph: 5,
+      wind_speed_mph: 0,
       wind_direction_deg: 270,
       humidity_pct: 64,
       precipitation_in: 0
@@ -329,8 +329,18 @@ test("Wind map arrows use speed outlines", async ({ page }) => {
       eta: "2026-07-10T18:00:00Z",
       temperature_f: 77,
       wind_speed_mph: 20,
-      wind_direction_deg: null,
+      wind_direction_deg: 0,
       humidity_pct: 60,
+      precipitation_in: 0
+    },
+    {
+      lat: 33.72,
+      lon: -77.82,
+      eta: "2026-07-10T21:00:00Z",
+      temperature_f: 77,
+      wind_speed_mph: 20,
+      wind_direction_deg: null,
+      humidity_pct: 59,
       precipitation_in: 0
     },
     {
@@ -341,6 +351,16 @@ test("Wind map arrows use speed outlines", async ({ page }) => {
       wind_speed_mph: 45,
       wind_direction_deg: "",
       humidity_pct: 58,
+      precipitation_in: 0
+    },
+    {
+      lat: 33.18,
+      lon: -78.08,
+      eta: "2026-07-11T03:00:00Z",
+      temperature_f: 78,
+      wind_speed_mph: 0,
+      wind_direction_deg: 0,
+      humidity_pct: 57,
       precipitation_in: 0
     },
     {
@@ -360,19 +380,43 @@ test("Wind map arrows use speed outlines", async ({ page }) => {
       temperature_f: 80,
       wind_speed_mph: null,
       wind_direction_deg: null,
-      humidity_pct: 54,
+      humidity_pct: 60,
       precipitation_in: 0
     }
   ];
   const waypoints = route.map(({ lat, lon, eta }) => ({ lat, lon, eta }));
-  const validWindDirectionCount = route.filter(({ wind_direction_deg }) => {
+  const isAbsentSpeedForMap = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return true;
+    }
+
+    const number = Number(value);
+    return !Number.isFinite(number) || number === 0;
+  };
+  const isAbsentDirectionForMap = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return true;
+    }
+
+    const number = Number(value);
+    return !Number.isFinite(number) || number === 0 || number < 0 || number > 360;
+  };
+  const hasTableUnknownDirection = ({ wind_direction_deg }) => {
     if (wind_direction_deg === null || wind_direction_deg === undefined || wind_direction_deg === "") {
-      return false;
+      return true;
     }
 
     const direction = Number(wind_direction_deg);
-    return Number.isFinite(direction) && direction >= 0 && direction <= 360;
-  }).length;
+    return !Number.isFinite(direction) || direction === 0 || direction < 0 || direction > 360;
+  };
+  const shouldHideMapMarker = ({ wind_speed_mph, wind_direction_deg }) =>
+    isAbsentSpeedForMap(wind_speed_mph) && isAbsentDirectionForMap(wind_direction_deg);
+  const hasMapDot = ({ wind_speed_mph, wind_direction_deg }) =>
+    !isAbsentSpeedForMap(wind_speed_mph) && isAbsentDirectionForMap(wind_direction_deg);
+  const hasMapArrow = (waypoint) => !shouldHideMapMarker(waypoint) && !hasMapDot(waypoint);
+  const expectedArrowCount = route.filter(hasMapArrow).length;
+  const expectedDotCount = route.filter(hasMapDot).length;
+  const expectedUnknownDirectionCount = route.filter(hasTableUnknownDirection).length;
 
   await page.route("http://localhost:8000/api/v1/forecast", async (routeRequest) => {
     await routeRequest.fulfill({
@@ -391,33 +435,47 @@ test("Wind map arrows use speed outlines", async ({ page }) => {
   const mapArrows = page.locator(".wind-map-direction-arrow");
   const mapDots = page.locator(".wind-map-direction-dot");
 
-  await expect(mapArrows).toHaveCount(validWindDirectionCount);
-  await expect(mapDots).toHaveCount(route.length - validWindDirectionCount);
-  await expect(page.locator(".wind-map-direction-arrow.wind-speed-default")).toHaveCount(2);
+  await expect(mapArrows).toHaveCount(expectedArrowCount);
+  await expect(mapDots).toHaveCount(expectedDotCount);
+  await expect(page.locator(".wind-map-direction-arrow.wind-speed-default")).toHaveCount(1);
   await expect(page.locator(".wind-map-direction-arrow.wind-speed-strong")).toHaveCount(1);
   await expect(page.locator(".wind-map-direction-arrow.wind-speed-extreme")).toHaveCount(1);
-  await expect(page.locator(".wind-map-direction-arrow.wind-speed-missing")).toHaveCount(1);
-  await expect(page.locator(".wind-map-direction-dot.wind-speed-default")).toHaveCount(1);
+  await expect(page.locator(".wind-map-direction-arrow.wind-speed-missing")).toHaveCount(2);
+  await expect(page.locator(".wind-map-direction-dot.wind-speed-default")).toHaveCount(2);
   await expect(page.locator(".wind-map-direction-dot.wind-speed-strong")).toHaveCount(1);
   await expect(page.locator(".wind-map-direction-dot.wind-speed-extreme")).toHaveCount(1);
-  await expect(page.locator(".wind-map-direction-dot.wind-speed-missing")).toHaveCount(1);
-  await expect(page.locator(".wind-direction-unknown")).toHaveCount(route.length - validWindDirectionCount);
+  await expect(page.locator(".wind-map-direction-dot.wind-speed-missing")).toHaveCount(0);
+  await expect(page.locator(".wind-direction-unknown")).toHaveCount(expectedUnknownDirectionCount);
+  await expect(page.locator(".wind-direction-unknown").filter({ hasText: "N/A" })).toHaveCount(5);
+  await expect(page.locator(".wind-direction-unknown").filter({ hasText: "?" })).toHaveCount(1);
   await expect(mapArrows.first()).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(mapArrows.first()).toHaveCSS("border-top-width", "0px");
-  for (let index = 0; index < validWindDirectionCount; index++) {
+  for (let index = 0; index < expectedArrowCount; index++) {
     await expect(mapArrows.nth(index)).toHaveCSS("color", "rgb(0, 0, 0)");
   }
 
-  const invalidDirectionRow = page
+  const weatherRows = page
     .locator("table")
     .filter({ hasText: "Temp °F" })
     .first()
-    .locator("tbody tr")
-    .nth(route.length - 1);
+    .locator("tbody tr");
+
+  await expect(weatherRows.nth(0).locator(".wind-direction-cardinal")).toHaveText("SW");
+  await expect(weatherRows.nth(1).locator(".wind-direction-cardinal")).toHaveText("W");
+  await expect(weatherRows.nth(2).locator(".wind-direction-cardinal")).toHaveText("N");
+  await expect(weatherRows.nth(3).locator(".wind-direction-cardinal")).toHaveText("E");
+  await expect(weatherRows.nth(4).locator(".wind-direction-cardinal")).toHaveText("SE");
+
+  const invalidDirectionRow = weatherRows.nth(route.length - 2);
+
+  const blankDirectionRow = weatherRows.nth(route.length - 1);
 
   await expect(invalidDirectionRow.locator(".wind-direction-unknown")).toHaveText("?");
   await expect(invalidDirectionRow.locator(".wind-direction-arrow")).toHaveCount(0);
   await expect(invalidDirectionRow.locator(".wind-direction-cardinal")).toHaveCount(0);
+  await expect(blankDirectionRow.locator(".wind-direction-unknown")).toHaveText("N/A");
+  await expect(blankDirectionRow.locator(".wind-direction-arrow")).toHaveCount(0);
+  await expect(blankDirectionRow.locator(".wind-direction-cardinal")).toHaveCount(0);
 
   const defaultOutlines = await page
     .locator(".wind-map-direction-arrow.wind-speed-default")
@@ -444,16 +502,20 @@ test("Wind map arrows use speed outlines", async ({ page }) => {
     }));
   const missingOutline = await page
     .locator(".wind-map-direction-arrow.wind-speed-missing")
-    .evaluate((element) => ({
-      color: getComputedStyle(element).webkitTextStrokeColor,
-      width: getComputedStyle(element).webkitTextStrokeWidth,
-      shadow: getComputedStyle(element).textShadow
-    }));
+    .evaluateAll((elements) =>
+      elements.map((element) => ({
+        color: getComputedStyle(element).webkitTextStrokeColor,
+        width: getComputedStyle(element).webkitTextStrokeWidth,
+        shadow: getComputedStyle(element).textShadow
+      }))
+    );
   const dotStyles = await mapDots
     .evaluateAll((elements) => elements.map((element) => ({
       width: getComputedStyle(element).width,
       height: getComputedStyle(element).height,
       background: getComputedStyle(element).backgroundColor,
+      borderColor: getComputedStyle(element).borderTopColor,
+      borderWidth: getComputedStyle(element).borderTopWidth,
       marginLeft: getComputedStyle(element.parentElement).marginLeft,
       marginTop: getComputedStyle(element.parentElement).marginTop
     })));
@@ -463,18 +525,20 @@ test("Wind map arrows use speed outlines", async ({ page }) => {
       color: "rgb(27, 187, 228)",
       width: "2px",
       shadow: "none"
+    }
+  ]);
+  expect(missingOutline).toEqual([
+    {
+      color: "rgb(0, 0, 0)",
+      width: "2px",
+      shadow: "none"
     },
     {
-      color: "rgb(27, 187, 228)",
+      color: "rgb(0, 0, 0)",
       width: "2px",
       shadow: "none"
     }
   ]);
-  expect(missingOutline).toEqual({
-    color: "rgb(0, 0, 0)",
-    width: "2px",
-    shadow: "none"
-  });
   expect(strongOutline).toEqual({
     color: "rgb(37, 99, 235)",
     width: "2px",
@@ -490,6 +554,17 @@ test("Wind map arrows use speed outlines", async ({ page }) => {
       width: "15px",
       height: "15px",
       background: "rgb(27, 187, 228)",
+      borderColor: "rgb(0, 0, 0)",
+      borderWidth: "2px",
+      marginLeft: "-7.5px",
+      marginTop: "-42px"
+    },
+    {
+      width: "15px",
+      height: "15px",
+      background: "rgb(27, 187, 228)",
+      borderColor: "rgb(0, 0, 0)",
+      borderWidth: "2px",
       marginLeft: "-7.5px",
       marginTop: "-42px"
     },
@@ -497,6 +572,8 @@ test("Wind map arrows use speed outlines", async ({ page }) => {
       width: "15px",
       height: "15px",
       background: "rgb(37, 99, 235)",
+      borderColor: "rgb(0, 0, 0)",
+      borderWidth: "2px",
       marginLeft: "-7.5px",
       marginTop: "-42px"
     },
@@ -504,13 +581,8 @@ test("Wind map arrows use speed outlines", async ({ page }) => {
       width: "15px",
       height: "15px",
       background: "rgb(255, 46, 46)",
-      marginLeft: "-7.5px",
-      marginTop: "-42px"
-    },
-    {
-      width: "15px",
-      height: "15px",
-      background: "rgb(0, 0, 0)",
+      borderColor: "rgb(0, 0, 0)",
+      borderWidth: "2px",
       marginLeft: "-7.5px",
       marginTop: "-42px"
     }

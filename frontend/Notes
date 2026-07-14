@@ -31,6 +31,9 @@ Added some general front end tests
 Pre determined weather validation test
 Improve wind direction on map display
 Accounted for missing wind data causing issues with map
+-
+Flipped wind arrows to point to wind direction instead of wind source
+Added more special cases to account for missing/0 Wind MPH and Wind Dir
 
 In Progress:
 
