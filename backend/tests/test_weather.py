@@ -87,3 +87,38 @@ def test_multiple_waypoints_preserve_input_order():
     wps = [WP, Waypoint(lat=32.78, lon=-79.93, eta="2026-06-09T10:00:00Z")]
     out = _run(wps)
     assert [w.lat for w in out] == [36.85, 32.78]
+
+
+@respx.mock
+def test_large_route_survives_uncaught_fetch_error():
+    """A fetch error the per-waypoint handler doesn't catch degrades to null for
+    that waypoint instead of failing the whole route (regression: an unexpected
+    error used to escape asyncio.gather and 500 the entire request)."""
+    respx.get(settings.open_meteo_url).mock(side_effect=RuntimeError("boom"))
+    wps = [Waypoint(lat=21.31, lon=-157.86, eta="2026-06-08T00:00:00Z") for _ in range(100)]
+    out = _run(wps)
+    assert len(out) == 100
+    assert all(w.temperature_f is None and w.wind_speed_mph is None for w in out)
+    assert all(w.lat == 21.31 for w in out)   # waypoint identity preserved
+
+
+def test_concurrency_is_capped(monkeypatch):
+    """No more than _MAX_CONCURRENCY upstream requests run at once, so a long
+    route can't open hundreds of connections in a single burst."""
+    active = 0
+    peak = 0
+
+    async def fake_get(self, url, **kwargs):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0.01)   # hold the slot so overlap is observable
+        active -= 1
+        return httpx.Response(200, json=_OPEN_METEO_OK, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    wps = [WP for _ in range(50)]
+    out = _run(wps)
+    assert len(out) == 50
+    assert all(w.temperature_f == 70.9 for w in out)   # success path, not degraded
+    assert 1 < peak <= open_meteo._MAX_CONCURRENCY

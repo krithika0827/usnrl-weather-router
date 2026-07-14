@@ -111,6 +111,24 @@ def test_rejects_empty_waypoints():
     assert client.post("/api/v1/forecast", json={"waypoints": []}).status_code == 422
 
 
+def test_rejects_more_than_50_waypoints():
+    """A route with over 50 waypoints is rejected with 422."""
+    bad = {"waypoints": [
+        {"lat": 36.85, "lon": -76.30, "eta": "2026-06-08T12:00:00Z"}
+        for _ in range(51)
+    ]}
+    assert client.post("/api/v1/forecast", json=bad).status_code == 422
+
+
+def test_accepts_exactly_50_waypoints(stub_weather):
+    """A route at the 50-waypoint cap is accepted."""
+    ok = {"waypoints": [
+        {"lat": 36.85, "lon": -76.30, "eta": "2026-06-08T12:00:00Z"}
+        for _ in range(50)
+    ]}
+    assert client.post("/api/v1/forecast", json=ok).status_code == 200
+
+
 def test_rejects_bad_eta_format():
     """A non-ISO-8601 eta is rejected with 422."""
     bad = {"waypoints": [{"lat": 36.85, "lon": -76.30, "eta": "not-a-date"}]}

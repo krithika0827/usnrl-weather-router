@@ -44,7 +44,7 @@ time of arrival (ISO 8601, UTC).
 | `lat` | number in `[-90, 90]` |
 | `lon` | number in `[-180, 180]` |
 | `eta` | valid ISO 8601 timestamp |
-| `waypoints` | at least 1 |
+| `waypoints` | at least 1, at most 50 |
 | ordering | `eta` values non-decreasing (in chronological order) |
 
 ### Output
