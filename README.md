@@ -124,6 +124,6 @@ tests/               test_api.py (endpoint), test_weather.py (service, mocked)
 ## Tests
 
 ```bash
-docker compose run --rm backend pytest -q    # 18 tests, fully mocked — no network
+docker compose run --rm backend pytest -q    # 27 tests, fully mocked — no network
 ```
 CI (`.github/workflows/test.yml`) runs the same suite on every push and PR.

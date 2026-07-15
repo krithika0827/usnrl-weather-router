@@ -77,6 +77,21 @@ def test_negative_precipitation_returns_error():
     )
 
 
+def test_negative_wind_speed_returns_error():
+    # Checks that negative wind speed is invalid.
+    findings = run_validation(
+        [make_waypoint(wind_speed_mph=-5)],
+        "Light winds are expected.",
+    )
+
+    assert any(
+        finding["severity"] == "error"
+        and finding["field"] == "route[0].wind_speed_mph"
+        and "Wind speed cannot be negative" in finding["message"]
+        for finding in findings
+    )
+
+
 def test_invalid_humidity_returns_error():
     # Checks that humidity outside 0 to 100 is invalid.
     findings = run_validation(
@@ -87,6 +102,57 @@ def test_invalid_humidity_returns_error():
     assert any(
         finding["severity"] == "error"
         and finding["field"] == "route[0].humidity_pct"
+        for finding in findings
+    )
+
+
+def test_invalid_latitude_returns_error():
+    # Checks that latitude outside the valid range is invalid.
+    bad_waypoint = make_waypoint()
+    bad_waypoint.lat = 120
+
+    findings = run_validation(
+        [bad_waypoint],
+        "Mild weather is expected.",
+    )
+
+    assert any(
+        finding["severity"] == "error"
+        and finding["field"] == "route[0].lat"
+        and "Latitude must be between -90 and 90" in finding["message"]
+        for finding in findings
+    )
+
+
+def test_invalid_longitude_returns_error():
+    # Checks that longitude outside the valid range is invalid.
+    bad_waypoint = make_waypoint()
+    bad_waypoint.lon = 200
+
+    findings = run_validation(
+        [bad_waypoint],
+        "Mild weather is expected.",
+    )
+
+    assert any(
+        finding["severity"] == "error"
+        and finding["field"] == "route[0].lon"
+        and "Longitude must be between -180 and 180" in finding["message"]
+        for finding in findings
+    )
+
+
+def test_unrealistic_temperature_returns_warning():
+    # Checks that unrealistic temperature values are flagged.
+    findings = run_validation(
+        [make_waypoint(temperature_f=150)],
+        "Very hot weather is expected.",
+    )
+
+    assert any(
+        finding["severity"] == "warning"
+        and finding["field"] == "route[0].temperature_f"
+        and "Temperature value looks unrealistic" in finding["message"]
         for finding in findings
     )
 
