@@ -249,6 +249,28 @@ button:disabled {
     cursor: not-allowed;
 }
 
+.weather-situation-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+.weather-situation-action-button {
+    width: 190px;
+    min-width: 190px;
+}
+
+.waypoint-weather-table-content {
+    padding: 20px;
+}
+
+.waypoint-weather-table {
+    box-shadow: none;
+    margin: 0;
+}
+
 .btn-secondary {
     background: transparent;
     color: var(--text-dim);
@@ -387,57 +409,66 @@ tbody tr:hover td {
     line-height: 1;
 }
 
-.wind-map-direction-icon {
-    pointer-events: none;
-}
-
-.wind-map-direction-arrow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
+.waypoint-wind-map-icon {
     background: transparent;
     border: 0;
-    color: #000;
-    font-size: 24px;
+}
+
+.wind-map-waypoint-marker {
+    position: relative;
+}
+
+.wind-map-waypoint-symbol-layer,
+.wind-map-waypoint-number {
+    pointer-events: none;
+}
+
+.wind-map-waypoint-symbol-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.wind-map-waypoint-circle-shape {
+    fill: #1e8bc3;
+    stroke: #000;
+    stroke-width: 2.2;
+}
+
+.wind-map-waypoint-direction-dot {
+    fill: #fff;
+    stroke: #000;
+    stroke-width: 2;
+}
+
+.wind-map-waypoint-barb-staff,
+.wind-map-waypoint-barb-feather {
+    stroke: #000;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.wind-map-waypoint-barb-pennant {
+    fill: #000;
+    stroke: #000;
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+}
+
+.wind-map-waypoint-number {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: #fff;
+    font-size: 14px;
     font-weight: 800;
     line-height: 1;
-    text-shadow: none;
-    -webkit-text-stroke: 2px var(--accent);
-    pointer-events: none;
-    transform-origin: center;
-}
-
-.wind-map-direction-arrow.wind-speed-default {
-    color: #000;
-    -webkit-text-stroke-color: #1bbbe4;
-}
-
-.wind-map-direction-arrow.wind-speed-missing {
-    color: #000;
-    -webkit-text-stroke-color: #000;
-}
-
-.wind-map-direction-arrow.wind-speed-strong {
-    color: #000;
-    -webkit-text-stroke-color: #2563eb;
-}
-
-.wind-map-direction-arrow.wind-speed-extreme {
-    color: #000;
-    font-size: 26px;
-    font-weight: 900;
-    -webkit-text-stroke-color: #ff2e2e;
-}
-
-.wind-map-direction-dot {
-    width: 15px;
-    height: 15px;
-    box-sizing: border-box;
-    border-radius: 50%;
-    background: #000;
-    border: 2px solid #000;
 }
 
 pre {
@@ -493,6 +524,17 @@ tbody td {
 @media (max-width: 1000px) {
     .map-row {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 520px) {
+    .weather-situation-actions {
+        flex-wrap: wrap;
+    }
+
+    .weather-situation-action-button {
+        width: 100%;
+        min-width: 0;
     }
 }
 

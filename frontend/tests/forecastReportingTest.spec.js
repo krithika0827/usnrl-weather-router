@@ -1,6 +1,6 @@
 const { test, expect } = require("@playwright/test");
 
-const waypointsTextSmall = `[
+const waypointsTextOnePoint = `[
   { "lat": 36.85, "lon": -76.30, "eta": "2026-07-09T12:00:00Z" }
 ]`;
 
@@ -121,7 +121,7 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-async function runForecast(page, waypoints = waypointsTextSmall) {
+async function runForecast(page, waypoints = waypointsTextOnePoint) {
   await page.goto("/");
 
   await page.locator("textarea").first().fill(waypoints);
@@ -210,8 +210,10 @@ async function assertWaypointEndpoints(rows, waypoints) {
   await expect(rows.last().locator("td").nth(3)).toHaveText(String(lastWaypoint.lon));
 }
 
+
+// 1 waypoint (validate weather information)
 test("Small forecast Test With data validation", async ({ page }) => {
-  const smallWaypoints = JSON.parse(waypointsTextSmall);
+  const smallWaypoints = JSON.parse(waypointsTextOnePoint);
   const expectedWeather = {
     ...smallWaypoints[0],
     temperature_f: 77,
@@ -220,18 +222,6 @@ test("Small forecast Test With data validation", async ({ page }) => {
     humidity_pct: 90,
     precipitation_in: 0
   };
-
-  await page.route("http://localhost:8000/api/v1/forecast", async (routeRequest) => {
-    await routeRequest.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        route: [expectedWeather],
-        summary: "Mock forecast",
-        validation: []
-      })
-    });
-  });
 
   await runForecast(page);
 
@@ -249,7 +239,7 @@ test("Small forecast Test With data validation", async ({ page }) => {
 
   await assertPeakValuesAndTravelDetails(page, smallWaypoints.length);
 });
-
+// 5 waypoints (Default) (confirm no errors)
 test("Prefilled waypoints Test", async ({ page }) => {
   await page.goto("/");
 
@@ -271,327 +261,9 @@ test("Prefilled waypoints Test", async ({ page }) => {
 
   await assertPeakValuesAndTravelDetails(page, prefilledWaypoints.length);
 });
-test("Wind map arrows use speed outlines", async ({ page }) => {
-  const route = [
-    {
-      lat: 36.85,
-      lon: -76.30,
-      eta: "2026-07-09T12:00:00Z",
-      temperature_f: 70,
-      wind_speed_mph: 20,
-      wind_direction_deg: 45,
-      humidity_pct: 70,
-      precipitation_in: 0
-    },
-    {
-      lat: 36.20,
-      lon: -76.55,
-      eta: "2026-07-09T18:00:00Z",
-      temperature_f: 72,
-      wind_speed_mph: 45,
-      wind_direction_deg: 90,
-      humidity_pct: 68,
-      precipitation_in: 0
-    },
-    {
-      lat: 35.65,
-      lon: -76.90,
-      eta: "2026-07-10T00:00:00Z",
-      temperature_f: 74,
-      wind_speed_mph: 58,
-      wind_direction_deg: 180,
-      humidity_pct: 66,
-      precipitation_in: 0
-    },
-    {
-      lat: 35.10,
-      lon: -77.20,
-      eta: "2026-07-10T06:00:00Z",
-      temperature_f: 75,
-      wind_speed_mph: 0,
-      wind_direction_deg: 270,
-      humidity_pct: 64,
-      precipitation_in: 0
-    },
-    {
-      lat: 34.55,
-      lon: -77.45,
-      eta: "2026-07-10T12:00:00Z",
-      temperature_f: 76,
-      wind_speed_mph: null,
-      wind_direction_deg: 315,
-      humidity_pct: 62,
-      precipitation_in: 0
-    },
-    {
-      lat: 34.00,
-      lon: -77.70,
-      eta: "2026-07-10T18:00:00Z",
-      temperature_f: 77,
-      wind_speed_mph: 20,
-      wind_direction_deg: 0,
-      humidity_pct: 60,
-      precipitation_in: 0
-    },
-    {
-      lat: 33.72,
-      lon: -77.82,
-      eta: "2026-07-10T21:00:00Z",
-      temperature_f: 77,
-      wind_speed_mph: 20,
-      wind_direction_deg: null,
-      humidity_pct: 59,
-      precipitation_in: 0
-    },
-    {
-      lat: 33.45,
-      lon: -77.95,
-      eta: "2026-07-11T00:00:00Z",
-      temperature_f: 78,
-      wind_speed_mph: 45,
-      wind_direction_deg: "",
-      humidity_pct: 58,
-      precipitation_in: 0
-    },
-    {
-      lat: 33.18,
-      lon: -78.08,
-      eta: "2026-07-11T03:00:00Z",
-      temperature_f: 78,
-      wind_speed_mph: 0,
-      wind_direction_deg: 0,
-      humidity_pct: 57,
-      precipitation_in: 0
-    },
-    {
-      lat: 32.90,
-      lon: -78.20,
-      eta: "2026-07-11T06:00:00Z",
-      temperature_f: 79,
-      wind_speed_mph: 58,
-      wind_direction_deg: 400,
-      humidity_pct: 56,
-      precipitation_in: 0
-    },
-    {
-      lat: 32.35,
-      lon: -78.45,
-      eta: "2026-07-11T12:00:00Z",
-      temperature_f: 80,
-      wind_speed_mph: null,
-      wind_direction_deg: null,
-      humidity_pct: 60,
-      precipitation_in: 0
-    }
-  ];
-  const waypoints = route.map(({ lat, lon, eta }) => ({ lat, lon, eta }));
-  const isAbsentSpeedForMap = (value) => {
-    if (value === null || value === undefined || value === "") {
-      return true;
-    }
-
-    const number = Number(value);
-    return !Number.isFinite(number) || number === 0;
-  };
-  const isAbsentDirectionForMap = (value) => {
-    if (value === null || value === undefined || value === "") {
-      return true;
-    }
-
-    const number = Number(value);
-    return !Number.isFinite(number) || number === 0 || number < 0 || number > 360;
-  };
-  const hasTableUnknownDirection = ({ wind_direction_deg }) => {
-    if (wind_direction_deg === null || wind_direction_deg === undefined || wind_direction_deg === "") {
-      return true;
-    }
-
-    const direction = Number(wind_direction_deg);
-    return !Number.isFinite(direction) || direction === 0 || direction < 0 || direction > 360;
-  };
-  const shouldHideMapMarker = ({ wind_speed_mph, wind_direction_deg }) =>
-    isAbsentSpeedForMap(wind_speed_mph) && isAbsentDirectionForMap(wind_direction_deg);
-  const hasMapDot = ({ wind_speed_mph, wind_direction_deg }) =>
-    !isAbsentSpeedForMap(wind_speed_mph) && isAbsentDirectionForMap(wind_direction_deg);
-  const hasMapArrow = (waypoint) => !shouldHideMapMarker(waypoint) && !hasMapDot(waypoint);
-  const expectedArrowCount = route.filter(hasMapArrow).length;
-  const expectedDotCount = route.filter(hasMapDot).length;
-  const expectedUnknownDirectionCount = route.filter(hasTableUnknownDirection).length;
-
-  await page.route("http://localhost:8000/api/v1/forecast", async (routeRequest) => {
-    await routeRequest.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        route,
-        summary: "Mock forecast",
-        validation: []
-      })
-    });
-  });
-
-  await runForecast(page, JSON.stringify(waypoints, null, 2));
-
-  const mapArrows = page.locator(".wind-map-direction-arrow");
-  const mapDots = page.locator(".wind-map-direction-dot");
-
-  await expect(mapArrows).toHaveCount(expectedArrowCount);
-  await expect(mapDots).toHaveCount(expectedDotCount);
-  await expect(page.locator(".wind-map-direction-arrow.wind-speed-default")).toHaveCount(1);
-  await expect(page.locator(".wind-map-direction-arrow.wind-speed-strong")).toHaveCount(1);
-  await expect(page.locator(".wind-map-direction-arrow.wind-speed-extreme")).toHaveCount(1);
-  await expect(page.locator(".wind-map-direction-arrow.wind-speed-missing")).toHaveCount(2);
-  await expect(page.locator(".wind-map-direction-dot.wind-speed-default")).toHaveCount(2);
-  await expect(page.locator(".wind-map-direction-dot.wind-speed-strong")).toHaveCount(1);
-  await expect(page.locator(".wind-map-direction-dot.wind-speed-extreme")).toHaveCount(1);
-  await expect(page.locator(".wind-map-direction-dot.wind-speed-missing")).toHaveCount(0);
-  await expect(page.locator(".wind-direction-unknown")).toHaveCount(expectedUnknownDirectionCount);
-  await expect(page.locator(".wind-direction-unknown").filter({ hasText: "N/A" })).toHaveCount(5);
-  await expect(page.locator(".wind-direction-unknown").filter({ hasText: "?" })).toHaveCount(1);
-  await expect(mapArrows.first()).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-  await expect(mapArrows.first()).toHaveCSS("border-top-width", "0px");
-  for (let index = 0; index < expectedArrowCount; index++) {
-    await expect(mapArrows.nth(index)).toHaveCSS("color", "rgb(0, 0, 0)");
-  }
-
-  const weatherRows = page
-    .locator("table")
-    .filter({ hasText: "Temp °F" })
-    .first()
-    .locator("tbody tr");
-
-  await expect(weatherRows.nth(0).locator(".wind-direction-cardinal")).toHaveText("SW");
-  await expect(weatherRows.nth(1).locator(".wind-direction-cardinal")).toHaveText("W");
-  await expect(weatherRows.nth(2).locator(".wind-direction-cardinal")).toHaveText("N");
-  await expect(weatherRows.nth(3).locator(".wind-direction-cardinal")).toHaveText("E");
-  await expect(weatherRows.nth(4).locator(".wind-direction-cardinal")).toHaveText("SE");
-
-  const invalidDirectionRow = weatherRows.nth(route.length - 2);
-
-  const blankDirectionRow = weatherRows.nth(route.length - 1);
-
-  await expect(invalidDirectionRow.locator(".wind-direction-unknown")).toHaveText("?");
-  await expect(invalidDirectionRow.locator(".wind-direction-arrow")).toHaveCount(0);
-  await expect(invalidDirectionRow.locator(".wind-direction-cardinal")).toHaveCount(0);
-  await expect(blankDirectionRow.locator(".wind-direction-unknown")).toHaveText("N/A");
-  await expect(blankDirectionRow.locator(".wind-direction-arrow")).toHaveCount(0);
-  await expect(blankDirectionRow.locator(".wind-direction-cardinal")).toHaveCount(0);
-
-  const defaultOutlines = await page
-    .locator(".wind-map-direction-arrow.wind-speed-default")
-    .evaluateAll((elements) =>
-      elements.map((element) => ({
-        color: getComputedStyle(element).webkitTextStrokeColor,
-        width: getComputedStyle(element).webkitTextStrokeWidth,
-        shadow: getComputedStyle(element).textShadow
-      }))
-    );
-  const strongOutline = await page
-    .locator(".wind-map-direction-arrow.wind-speed-strong")
-    .evaluate((element) => ({
-      color: getComputedStyle(element).webkitTextStrokeColor,
-      width: getComputedStyle(element).webkitTextStrokeWidth,
-      shadow: getComputedStyle(element).textShadow
-    }));
-  const extremeOutline = await page
-    .locator(".wind-map-direction-arrow.wind-speed-extreme")
-    .evaluate((element) => ({
-      color: getComputedStyle(element).webkitTextStrokeColor,
-      width: getComputedStyle(element).webkitTextStrokeWidth,
-      shadow: getComputedStyle(element).textShadow
-    }));
-  const missingOutline = await page
-    .locator(".wind-map-direction-arrow.wind-speed-missing")
-    .evaluateAll((elements) =>
-      elements.map((element) => ({
-        color: getComputedStyle(element).webkitTextStrokeColor,
-        width: getComputedStyle(element).webkitTextStrokeWidth,
-        shadow: getComputedStyle(element).textShadow
-      }))
-    );
-  const dotStyles = await mapDots
-    .evaluateAll((elements) => elements.map((element) => ({
-      width: getComputedStyle(element).width,
-      height: getComputedStyle(element).height,
-      background: getComputedStyle(element).backgroundColor,
-      borderColor: getComputedStyle(element).borderTopColor,
-      borderWidth: getComputedStyle(element).borderTopWidth,
-      marginLeft: getComputedStyle(element.parentElement).marginLeft,
-      marginTop: getComputedStyle(element.parentElement).marginTop
-    })));
-
-  expect(defaultOutlines).toEqual([
-    {
-      color: "rgb(27, 187, 228)",
-      width: "2px",
-      shadow: "none"
-    }
-  ]);
-  expect(missingOutline).toEqual([
-    {
-      color: "rgb(0, 0, 0)",
-      width: "2px",
-      shadow: "none"
-    },
-    {
-      color: "rgb(0, 0, 0)",
-      width: "2px",
-      shadow: "none"
-    }
-  ]);
-  expect(strongOutline).toEqual({
-    color: "rgb(37, 99, 235)",
-    width: "2px",
-    shadow: "none"
-  });
-  expect(extremeOutline).toEqual({
-    color: "rgb(255, 46, 46)",
-    width: "2px",
-    shadow: "none"
-  });
-  expect(dotStyles).toEqual([
-    {
-      width: "15px",
-      height: "15px",
-      background: "rgb(27, 187, 228)",
-      borderColor: "rgb(0, 0, 0)",
-      borderWidth: "2px",
-      marginLeft: "-7.5px",
-      marginTop: "-42px"
-    },
-    {
-      width: "15px",
-      height: "15px",
-      background: "rgb(27, 187, 228)",
-      borderColor: "rgb(0, 0, 0)",
-      borderWidth: "2px",
-      marginLeft: "-7.5px",
-      marginTop: "-42px"
-    },
-    {
-      width: "15px",
-      height: "15px",
-      background: "rgb(37, 99, 235)",
-      borderColor: "rgb(0, 0, 0)",
-      borderWidth: "2px",
-      marginLeft: "-7.5px",
-      marginTop: "-42px"
-    },
-    {
-      width: "15px",
-      height: "15px",
-      background: "rgb(255, 46, 46)",
-      borderColor: "rgb(0, 0, 0)",
-      borderWidth: "2px",
-      marginLeft: "-7.5px",
-      marginTop: "-42px"
-    }
-  ]);
-});
 
 
 // Re-enable after weather fetch fix is merged
-/*
 test("Large forecast Test @headed", async ({ page }, testInfo) => {
   testInfo.setTimeout(largeForecastBrowserWaitMs + 120000);
 
@@ -612,4 +284,4 @@ test("Large forecast Test @headed", async ({ page }, testInfo) => {
 
   await assertPeakValuesAndTravelDetails(page, largeWaypoints.length);
 });
-*/
+
