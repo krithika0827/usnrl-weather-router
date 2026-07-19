@@ -13,6 +13,27 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 
+const API_REQUEST_TIMEOUT_MS = 20000;
+
+async function fetchWithTimeout(url, options) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+    } catch (error) {
+        if (error.name === "AbortError") {
+            throw new Error("Request timed out after 20 seconds.");
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 // Recenter the map when route points fall outside the current view.
 function RouteBoundsUpdater({points}) {
     const map = useMap();
@@ -201,7 +222,7 @@ function App() {
         setError("");
         setLoading(true);
         try {
-            const response = await fetch("http://localhost:8000/api/v1/summary", {
+            const response = await fetchWithTimeout("http://localhost:8000/api/v1/summary", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -354,7 +375,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         setLoading(true);
         try {
             const waypoints = JSON.parse(waypointsText);
-            const response = await fetch("http://localhost:8000/api/v1/forecast", {
+            const response = await fetchWithTimeout("http://localhost:8000/api/v1/forecast", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"

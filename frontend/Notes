@@ -40,16 +40,15 @@ Joined the way point and Wind barb to make it easer to read
 removed save button as this implementation is not needed
 added secondary regenerate and download buttons to the bottom of the waypoint chart
 Made the lower regenerate button also scroll the user back up to the Route Map near the Weather Situation
-
-
-In Progress:
 Finalise tests
 ✓    1 waypoint (validate weather information)
-    5 waypoints (Default) (confirm no errors)
-    50 waypoints (confirm no missing values)
-    52 waypoints (Confirm our of range)
-    Run forecast, change data (Names, waypoints) re run Forecast
-    5 waypoints run forecast, change table values, confirm updated peak, regenerate confirm updated Weather Situation
+✓    5 waypoints (Default) (confirm no errors)
+✓    50 waypoints (confirm no missing values)
+✓    52 waypoints (Confirm our of range error)
+✓    Run forecast, change data (Names, waypoints) re run Forecast
+
+In Progress:
+Validate that the flags are displaying the correct speeds
 
 To do:
 Improve automated tests
@@ -58,7 +57,7 @@ Improve automated tests
 Stretch goals:
 X Allow users to download a PDF report
 X In APP Save and load previous routes
-X  unique id that can be used in app backend to save/load routes
+X unique id that can be used in app backend to save/load routes
 
  For testing use this to install frontend dependencies:
   cd frontend
