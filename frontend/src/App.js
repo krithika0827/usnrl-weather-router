@@ -13,6 +13,27 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 
+const API_REQUEST_TIMEOUT_MS = 20000;
+
+async function fetchWithTimeout(url, options) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+    } catch (error) {
+        if (error.name === "AbortError") {
+            throw new Error("Request timed out after 20 seconds.");
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 // Recenter the map when route points fall outside the current view.
 function RouteBoundsUpdater({points}) {
     const map = useMap();
@@ -201,7 +222,7 @@ function App() {
         setError("");
         setLoading(true);
         try {
-            const response = await fetch("http://localhost:8000/api/v1/summary", {
+            const response = await fetchWithTimeout("http://localhost:8000/api/v1/summary", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -354,7 +375,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         setLoading(true);
         try {
             const waypoints = JSON.parse(waypointsText);
-            const response = await fetch("http://localhost:8000/api/v1/forecast", {
+            const response = await fetchWithTimeout("http://localhost:8000/api/v1/forecast", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -444,6 +465,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     }
 
     function formatWindDirection(value) {
+        if (shouldShowWindDirectionReadoutAsNA(value)) return "N/A";
+
         const direction = getWindDirectionDisplay(value);
         if (!direction.isAvailable) return "N/A";
 
@@ -491,7 +514,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         );
     }
 
-    function shouldUseWindMapDot(windSpeed, windDirection) {
+    function shouldShowMissingWindDirectionWarning(windSpeed, windDirection) {
         return (
             !isAbsentWindSpeedForMap(windSpeed) &&
             isAbsentWindDirectionForMap(windDirection)
@@ -538,8 +561,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             return "circle-only";
         }
 
-        if (shouldUseWindMapDot(windSpeed, windDirection)) {
-            return "dot";
+        if (shouldShowMissingWindDirectionWarning(windSpeed, windDirection)) {
+            return "direction-warning";
         }
 
         return "barb";
@@ -552,7 +575,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         const circleCenterX = width / 2;
         const circleCenterYBaseOffset = circleRadius + circlePaddingBottom;
 
-        if (markerState === "circle-only") {
+        if (markerState === "circle-only" || markerState === "direction-warning") {
             const height = circleRadius * 2 + circlePaddingBottom * 2;
             return {
                 width,
@@ -560,30 +583,6 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                 circleRadius,
                 circleCenterX,
                 circleCenterY: height - circleCenterYBaseOffset
-            };
-        }
-
-        if (markerState === "dot") {
-            const dotRadius = 6;
-            const dotGap = 8;
-            const height =
-                circleRadius * 2 +
-                circlePaddingBottom * 2 +
-                dotRadius * 2 +
-                dotGap;
-
-            return {
-                width,
-                height,
-                circleRadius,
-                circleCenterX,
-                circleCenterY: height - circleCenterYBaseOffset,
-                dotRadius,
-                dotCenterY:
-                    height -
-                    circleCenterYBaseOffset -
-                    circleRadius -
-                    dotGap
             };
         }
 
@@ -620,12 +619,6 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         markup.push(
             `<circle class="wind-map-waypoint-circle-shape" cx="${layout.circleCenterX}" cy="${layout.circleCenterY}" r="${layout.circleRadius}" />`
         );
-
-        if (markerState === "dot") {
-            markup.push(
-                `<circle class="wind-map-waypoint-direction-dot" cx="${layout.circleCenterX}" cy="${layout.dotCenterY}" r="${layout.dotRadius}" />`
-            );
-        }
 
         if (markerState === "barb") {
             markup.push(
@@ -724,7 +717,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             title = isAbsentWindSpeedForMap(windSpeed)
                 ? `Waypoint ${waypointNumber}: wind direction ${windDirection.label}, speed unavailable`
                 : `Waypoint ${waypointNumber}: wind ${windSpeed} mph from ${windDirection.label}`;
-        } else if (markerState === "dot") {
+        } else if (markerState === "direction-warning") {
             title = `Waypoint ${waypointNumber}: wind direction unavailable`;
         } else if (markerState === "circle-only") {
             title = `Waypoint ${waypointNumber}: wind unavailable`;
@@ -811,14 +804,18 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
         return (
             <div className="card waypoint-weather-table-card">
+                <div className="card-header">
+                    <h2>Weather Data Chart</h2>
+                </div>
                 <div className="waypoint-weather-table-content">
-                    <table className="waypoint-weather-table" border="1" cellPadding="8">
+                    <div className="waypoint-weather-table-frame">
+                        <table className="waypoint-weather-table" cellPadding="8">
                         <thead>
                         <tr>
-                            <th>Waypoint #</th>
-                            <th>ETA</th>
-                            <th>Lat</th>
-                            <th>Lon</th>
+                            <th className="waypoint-number-heading">📍 Waypoint</th>
+                            <th>🕒 ETA</th>
+                            <th>↕ Lat</th>
+                            <th className="longitude-heading">↔ Lon</th>
                             <th>🌡 Temp °F</th>
                             <th>💨 Wind MPH</th>
                             <th>↗ Wind Dir °</th>
@@ -929,7 +926,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                             );
                         })}
                         </tbody>
-                    </table>
+                        </table>
+                    </div>
                     {renderWeatherSituationActions({
                         regenerateOnClick: regenerateWeatherSituationAndScroll,
                         actionClassName: "waypoint-table-actions",
