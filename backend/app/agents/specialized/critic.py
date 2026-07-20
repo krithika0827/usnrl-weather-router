@@ -1,5 +1,6 @@
 # QA critique agent / validation — Owner: Ryan
 
+import re
 from typing import Any, List
 
 from app.agents.state import ValidationFinding, ValidationState
@@ -10,6 +11,9 @@ TEMPERATURE_SPIKE_F = 30
 WIND_SPIKE_MPH = 35
 HUMIDITY_SPIKE_PCT = 40
 PRECIPITATION_SPIKE_IN = 1.0
+
+# Allows small formatting differences between route data and summary text.
+NUMBER_TOLERANCE = 0.05
 
 
 def _point_to_dict(point: Any) -> dict:
@@ -37,6 +41,90 @@ def _add_finding(
         "field": field,
         "message": message,
     })
+
+
+def _matches_known_value(value: float, known_values: list[float]) -> bool:
+    # Checks if a summary number appears in the route data.
+    return any(abs(value - known_value) <= NUMBER_TOLERANCE for known_value in known_values)
+
+
+def _add_summary_number_warning(
+    findings: List[ValidationFinding],
+    value: float,
+    unit: str,
+) -> None:
+    # Adds a warning when the summary uses a weather number not found in the route data.
+    _add_finding(
+        findings,
+        "warning",
+        "summary",
+        (
+            f"Summary includes {value:g} {unit}, but that value is not present "
+            "in the route weather data."
+        ),
+    )
+
+
+def _check_summary_weather_numbers(
+    findings: List[ValidationFinding],
+    summary: str,
+    temperatures: list[float],
+    winds: list[float],
+    precipitation_values: list[float],
+    humidity_values: list[float],
+) -> None:
+    # Checks weather numbers in the summary against raw route data.
+    unit_values = {
+        "f": temperatures,
+        "mph": winds,
+        "in": precipitation_values,
+        "%": humidity_values,
+    }
+
+    unit_boundary = r"(?=\s|[.,;:]|$)"
+
+    range_pattern = re.compile(
+        r"(-?\d+(?:\.\d+)?)\s*(?:to|-)\s*(-?\d+(?:\.\d+)?)\s*(f|mph|in|%)"
+        + unit_boundary,
+        re.IGNORECASE,
+    )
+
+    checked_spans = []
+
+    for match in range_pattern.finditer(summary):
+        checked_spans.append(match.span())
+        unit = match.group(3).lower()
+        known_values = unit_values.get(unit, [])
+
+        for value_text in [match.group(1), match.group(2)]:
+            value = float(value_text)
+            if known_values and not _matches_known_value(value, known_values):
+                _add_summary_number_warning(findings, value, unit)
+
+    single_pattern = re.compile(
+        r"(-?\d+(?:\.\d+)?)\s*(f|mph|in|%)" + unit_boundary,
+        re.IGNORECASE,
+    )
+
+    for match in single_pattern.finditer(summary):
+        if any(start <= match.start() < end for start, end in checked_spans):
+            continue
+
+        value = float(match.group(1))
+        unit = match.group(2).lower()
+        known_values = unit_values.get(unit, [])
+
+        if known_values and not _matches_known_value(value, known_values):
+            _add_summary_number_warning(findings, value, unit)
+
+
+def _summary_needs_regeneration(findings: List[ValidationFinding]) -> bool:
+    # Suggests summary regeneration when summary validation issues are found.
+    for finding in findings:
+        if finding["field"] == "summary" and "Summary is missing" not in finding["message"]:
+            return True
+
+    return False
 
 
 def validate_summary_against_route(state: ValidationState) -> dict:
@@ -121,6 +209,7 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         lon = point.get("lon")
         temp = point.get("temperature_f")
         wind = point.get("wind_speed_mph")
+        wind_direction = point.get("wind_direction_deg")
         precipitation = point.get("precipitation_in")
         humidity = point.get("humidity_pct")
 
@@ -166,6 +255,15 @@ def validate_summary_against_route(state: ValidationState) -> dict:
                 "Wind speed is unusually high and should be reviewed.",
             )
 
+        # Wind direction must stay within 0 to 360 degrees when available.
+        if wind_direction is not None and not 0 <= wind_direction <= 360:
+            _add_finding(
+                findings,
+                "error",
+                f"route[{index}].wind_direction_deg",
+                "Wind direction must be between 0 and 360 degrees.",
+            )
+
         # Precipitation cannot be negative.
         if precipitation is not None and precipitation < 0:
             _add_finding(
@@ -199,6 +297,11 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         point["precipitation_in"]
         for point in route
         if point.get("precipitation_in") is not None
+    ]
+    humidity_values = [
+        point["humidity_pct"]
+        for point in route
+        if point.get("humidity_pct") is not None
     ]
 
     if summary:
@@ -327,6 +430,16 @@ def validate_summary_against_route(state: ValidationState) -> dict:
                 "Summary describes cold conditions, but route temperatures remain above 60°F.",
             )
 
+        # Flags weather numbers in the summary that do not exist in route data.
+        _check_summary_weather_numbers(
+            findings,
+            summary,
+            temperatures,
+            winds,
+            precipitation_values,
+            humidity_values,
+        )
+
     # Compares consecutive waypoints for sudden changes.
     for index in range(1, len(route)):
         previous = route[index - 1]
@@ -413,6 +526,13 @@ def validate_summary_against_route(state: ValidationState) -> dict:
                 ),
             )
 
+    if summary and _summary_needs_regeneration(findings):
+        _add_finding(
+            findings,
+            "warning",
+            "summary",
+            "Summary may need to be regenerated after fixing validation issues.",
+        )
+
     # Returns all validation findings.
     return {"validation": findings}
-
