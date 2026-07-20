@@ -46,7 +46,7 @@ Working automated tests
 ✓    50 waypoints (confirm no missing values)
 ✓    52 waypoints (Confirm our of range error)
 ✓    Run forecast, change data (Names, waypoints) re run Forecast
-page layout improvements
+Page layout improvements
 Validate that the flags are displaying the correct speeds (Knots)
 
 In Progress:
