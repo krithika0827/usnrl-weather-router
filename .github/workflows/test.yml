@@ -1,4 +1,4 @@
-# GitHub Actions — pytest automation (CI/CD) — Owner: Joseph (shared)
+# GitHub Actions — pytest automation (CI/CD)
 name: tests
 
 on:
@@ -16,7 +16,51 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Run tests
         run: pytest -q
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      # The Playwright suite has a test that hits the real backend API
+      # (localhost:8000); start it so those un-mocked tests can run.
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Start backend API
+        working-directory: backend
+        run: |
+          nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health; then echo "backend ready"; exit 0; fi
+            sleep 1
+          done
+          echo "backend failed to start:"; cat backend.log; exit 1
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      # Fail fast with a clear message if the backend died during install,
+      # rather than an opaque "0 rows" timeout inside the Playwright suite.
+      - name: Verify backend still running
+        run: curl -sf http://127.0.0.1:8000/health
+      - name: Run tests
+        working-directory: frontend
+        run: npx playwright test --project=chromium
