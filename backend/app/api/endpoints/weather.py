@@ -17,6 +17,7 @@ from app.agents.specialized.generator import generate_weather_summary
 from app.models.waypoint import RouteRequest
 from app.models.weather_data import ForecastResponse, WaypointForecast
 from app.services import open_meteo
+from app.agents.specialized.llama_3b_generator import generate_weather_summary_llama_3b
 
 router = APIRouter()
 
@@ -34,7 +35,12 @@ async def create_forecast(request: RouteRequest) -> ForecastResponse:
     """Validate a route and return a forecast product for each waypoint."""
     route = await open_meteo.fetch_forecasts(request.waypoints)
 
-    summary = generate_weather_summary(
+    # summary = generate_weather_summary(
+    #     route,
+    #     vehicle_name=request.vehicle_name,
+    #     route_name=request.route_name,
+    # )
+    summary = await generate_weather_summary_llama_3b(
         route,
         vehicle_name=request.vehicle_name,
         route_name=request.route_name,
@@ -48,7 +54,12 @@ async def create_forecast(request: RouteRequest) -> ForecastResponse:
 async def create_summary(request: SummaryRequest) -> ForecastResponse:
     """Generate a summary from already-loaded or manually edited weather data."""
     route = request.route
-    summary = generate_weather_summary(
+    # summary = generate_weather_summary(
+    #     route,
+    #     vehicle_name=request.vehicle_name,
+    #     route_name=request.route_name,
+    # )
+    summary = await generate_weather_summary_llama_3b(
         route,
         vehicle_name=request.vehicle_name,
         route_name=request.route_name,
