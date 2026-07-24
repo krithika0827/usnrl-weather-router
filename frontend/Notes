@@ -52,6 +52,11 @@ Validate that the flags are displaying the correct speeds (Knots)
 In Progress:
 
 To do:
+Wind barb branch is pointing out the wrong way (acute angle vs obtuse angle)
+Switch all data to Knots
+Have 1 button for genitive report and one for AI report
+Add a "Reset Waypoint values" button
+stay with F
 
 Stretch goals:
 X Allow users to download a PDF report
