@@ -168,7 +168,7 @@ def test_temperature_spike_returns_warning():
 
     assert any(
         finding["severity"] == "warning"
-        and finding["field"] == "route[1].temperature_f"
+        and finding["field"] == "waypoints[1-2].temperature_f"
         and "Temperature changes by" in finding["message"]
         for finding in findings
     )
@@ -185,7 +185,7 @@ def test_wind_spike_returns_warning():
 
     assert any(
         finding["severity"] == "warning"
-        and finding["field"] == "route[1].wind_speed_mph"
+        and finding["field"] == "waypoints[1-2].wind_speed_mph"
         and "Wind speed changes by" in finding["message"]
         for finding in findings
     )

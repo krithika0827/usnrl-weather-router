@@ -13,6 +13,27 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 
+const API_REQUEST_TIMEOUT_MS = 20000;
+
+async function fetchWithTimeout(url, options) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+    } catch (error) {
+        if (error.name === "AbortError") {
+            throw new Error("Request timed out after 20 seconds.");
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 // Recenter the map when route points fall outside the current view.
 function RouteBoundsUpdater({points}) {
     const map = useMap();
@@ -43,6 +64,12 @@ function RouteBoundsUpdater({points}) {
 }
 
 function App() {
+    function scrollToRouteMap() {
+        routeMapTitleRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    }
 
     // Download the current weather context as a JSON file.
     function saveWeatherContextJson() {
@@ -195,7 +222,7 @@ function App() {
         setError("");
         setLoading(true);
         try {
-            const response = await fetch("http://localhost:8000/api/v1/summary", {
+            const response = await fetchWithTimeout("http://localhost:8000/api/v1/summary", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -221,6 +248,11 @@ function App() {
         } finally {
             setLoading(false);
         }
+    }
+
+    async function regenerateWeatherSituationAndScroll() {
+        scrollToRouteMap();
+        await regenerateWeatherSituation();
     }
 
 
@@ -249,6 +281,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     const [vehicleName, setVehicleName] = useState("Borealis");
     const [routeName, setRouteName] = useState("Kessel Run");
     const jsonUploadInputRef = useRef(null);
+    const routeMapTitleRef = useRef(null);
+    const weatherSituationTextAreaRef = useRef(null);
 
     const {min: minTemp, max: maxTemp} = getMinMax("temperature_f");
     const {min: minWind, max: maxWind} = getMinMax("wind_speed_mph");
@@ -341,7 +375,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         setLoading(true);
         try {
             const waypoints = JSON.parse(waypointsText);
-            const response = await fetch("http://localhost:8000/api/v1/forecast", {
+            const response = await fetchWithTimeout("http://localhost:8000/api/v1/forecast", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -380,7 +414,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         return min === max ? `${min}` : `${min} - ${max}`;
     };
 
-    // Convert a source wind bearing into the travel direction arrow/cardinal readout.
+    // Convert a wind bearing in degrees into an arrow/cardinal readout.
     function getWindDirectionDisplay(value) {
         if (value === null || value === undefined || value === "") {
             return {
@@ -401,10 +435,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             };
         }
 
-        const normalized =
-            number === 0
-                ? 0
-                : (((number + 180) % 360) + 360) % 360;
+        const normalized = ((number % 360) + 360) % 360;
         const labels = [
             "N",
             "NNE",
@@ -434,6 +465,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     }
 
     function formatWindDirection(value) {
+        if (shouldShowWindDirectionReadoutAsNA(value)) return "N/A";
+
         const direction = getWindDirectionDisplay(value);
         if (!direction.isAvailable) return "N/A";
 
@@ -446,40 +479,6 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
     function isMissingWindSpeed(value) {
         return value === null || value === undefined || value === "";
-    }
-
-    function getWindMapSpeedClass(value) {
-        if (isMissingWindSpeed(value)) return "wind-speed-missing";
-
-        const speed = Number(value);
-        if (!Number.isFinite(speed)) return "wind-speed-missing";
-        if (speed >= 58) return "wind-speed-extreme";
-        if (speed >= 40 && speed < 58) return "wind-speed-strong";
-        if (speed >= 0 && speed < 40) return "wind-speed-default";
-
-        return "wind-speed-missing";
-    }
-
-    function getWindMapOutlineColor(value) {
-        if (isMissingWindSpeed(value)) {
-            return "#000";
-        }
-
-        const speed = Number(value);
-        if (!Number.isFinite(speed)) {
-            return "#000";
-        }
-        if (Number.isFinite(speed) && speed >= 58) {
-            return "#ff2e2e";
-        }
-        if (Number.isFinite(speed) && speed >= 40 && speed < 58) {
-            return "#2563eb";
-        }
-        if (Number.isFinite(speed) && speed >= 0 && speed < 40) {
-            return "#1bbbe4";
-        }
-
-        return "#000";
     }
 
     function isZeroWindValue(value) {
@@ -515,27 +514,145 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         );
     }
 
-    function shouldUseWindMapDot(windSpeed, windDirection) {
+    function shouldShowMissingWindDirectionWarning(windSpeed, windDirection) {
         return (
             !isAbsentWindSpeedForMap(windSpeed) &&
             isAbsentWindDirectionForMap(windDirection)
         );
     }
 
-    function getWindMapArrowClass(windSpeed) {
-        if (isAbsentWindSpeedForMap(windSpeed)) {
-            return "wind-speed-missing";
+    function getWindBarbKnots(value) {
+        if (isAbsentWindSpeedForMap(value)) {
+            return 0;
         }
 
-        return getWindMapSpeedClass(windSpeed);
+        const speedMph = Number(value);
+        if (!Number.isFinite(speedMph) || speedMph <= 0) {
+            return 0;
+        }
+
+        const roundedKnots = Math.round((speedMph * 0.868976) / 5) * 5;
+        return Math.max(5, roundedKnots);
     }
 
-    function getWindMapArrowOutlineColor(windSpeed) {
-        if (isAbsentWindSpeedForMap(windSpeed)) {
-            return "#000";
+    function getWindBarbSegments(value) {
+        const knots = getWindBarbKnots(value);
+        let remaining = knots;
+
+        const pennants = Math.floor(remaining / 50);
+        remaining %= 50;
+
+        const fullBarbs = Math.floor(remaining / 10);
+        remaining %= 10;
+
+        const halfBarbs = Math.floor(remaining / 5);
+
+        return {
+            knots,
+            pennants,
+            fullBarbs,
+            halfBarbs,
+            mode: knots > 0 ? "feathered" : "staff-only"
+        };
+    }
+
+    function getWaypointWindMarkerState(windSpeed, windDirection) {
+        if (shouldHideWindMapMarker(windSpeed, windDirection)) {
+            return "circle-only";
         }
 
-        return getWindMapOutlineColor(windSpeed);
+        if (shouldShowMissingWindDirectionWarning(windSpeed, windDirection)) {
+            return "direction-warning";
+        }
+
+        return "barb";
+    }
+
+    function getWaypointWindMarkerLayout(markerState, segments) {
+        const width = 56;
+        const circleRadius = 19;
+        const circlePaddingBottom = 4;
+        const circleCenterX = width / 2;
+        const circleCenterYBaseOffset = circleRadius + circlePaddingBottom;
+
+        if (markerState === "circle-only" || markerState === "direction-warning") {
+            const height = circleRadius * 2 + circlePaddingBottom * 2;
+            return {
+                width,
+                height,
+                circleRadius,
+                circleCenterX,
+                circleCenterY: height - circleCenterYBaseOffset
+            };
+        }
+
+        const topPadding = 6;
+        const baseStaffLength = 26;
+        const staffLength =
+            baseStaffLength + Math.round(Math.sqrt(segments.knots) * 3.5);
+        const height =
+            circleRadius * 2 +
+            circlePaddingBottom * 2 +
+            staffLength +
+            topPadding;
+        const circleCenterY = height - circleCenterYBaseOffset;
+        const staffBaseY = circleCenterY - circleRadius + 1;
+        const staffTopY = staffBaseY - staffLength;
+
+        return {
+            width,
+            height,
+            circleRadius,
+            circleCenterX,
+            circleCenterY,
+            staffX: circleCenterX,
+            staffBaseY,
+            staffTopY,
+            staffLength,
+            outerX: width - 10
+        };
+    }
+
+    function renderWaypointWindMarkerSvg(markerState, layout, segments) {
+        const markup = [];
+
+        markup.push(
+            `<circle class="wind-map-waypoint-circle-shape" cx="${layout.circleCenterX}" cy="${layout.circleCenterY}" r="${layout.circleRadius}" />`
+        );
+
+        if (markerState === "barb") {
+            markup.push(
+                `<line class="wind-map-waypoint-barb-staff" x1="${layout.staffX}" y1="${layout.staffBaseY}" x2="${layout.staffX}" y2="${layout.staffTopY}" />`
+            );
+
+            let currentY = layout.staffTopY + 2;
+
+            for (let index = 0; index < segments.pennants; index++) {
+                markup.push(
+                    `<polygon class="wind-map-waypoint-barb-pennant" points="${layout.staffX},${currentY} ${layout.outerX},${currentY + 4} ${layout.staffX},${currentY + 8}" />`
+                );
+                currentY += 8;
+            }
+
+            for (let index = 0; index < segments.fullBarbs; index++) {
+                markup.push(
+                    `<line class="wind-map-waypoint-barb-feather" x1="${layout.staffX}" y1="${currentY}" x2="${layout.outerX}" y2="${currentY + 5}" />`
+                );
+                currentY += 6;
+            }
+
+            if (segments.halfBarbs > 0) {
+                markup.push(
+                    `<line class="wind-map-waypoint-barb-feather" x1="${layout.staffX}" y1="${currentY}" x2="${layout.staffX + 11}" y2="${currentY + 4}" />`
+                );
+            }
+        }
+
+        return `
+            <svg class="wind-map-waypoint-symbol-svg" viewBox="0 0 ${layout.width} ${layout.height}" aria-hidden="true">
+                ${markup.join("")}
+            </svg>
+        `;
     }
 
     // Convert degrees to radians for distance calculations.
@@ -585,196 +702,239 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             travelDistance: `${totalMiles.toFixed(1)} mi`
         };
     }
-    // Create a numbered Leaflet marker icon for each waypoint.
-    function createWaypointIcon(number) {
-        return L.divIcon({
-            className: "",
-            html: `
-            <div style="
-                background:#1e8bc3;
-                color:white;
-                border-radius:50%;
-                width:30px;
-                height:30px;
-                display:flex;
-                justify-content:center;
-                align-items:center;
-                font-weight:bold;
-                border:2px solid white;
-            ">
-                ${number}
-            </div>
-        `,
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
-        });
-    }
+    function createWaypointWindMarkerIcon(
+        waypointNumber,
+        windDirection,
+        windSpeed,
+        windDirectionValue
+    ) {
+        const markerState = getWaypointWindMarkerState(windSpeed, windDirectionValue);
+        const segments = markerState === "barb" ? getWindBarbSegments(windSpeed) : null;
+        const layout = getWaypointWindMarkerLayout(markerState, segments);
 
-    function createWindDirectionIcon(windDirection, windSpeed) {
-        const speedClass = getWindMapArrowClass(windSpeed);
-        const outlineColor = getWindMapArrowOutlineColor(windSpeed);
+        let title = `Waypoint ${waypointNumber}`;
+        if (markerState === "barb") {
+            title = isAbsentWindSpeedForMap(windSpeed)
+                ? `Waypoint ${waypointNumber}: wind direction ${windDirection.label}, speed unavailable`
+                : `Waypoint ${waypointNumber}: wind ${windSpeed} mph from ${windDirection.label}`;
+        } else if (markerState === "direction-warning") {
+            title = `Waypoint ${waypointNumber}: wind direction unavailable`;
+        } else if (markerState === "circle-only") {
+            title = `Waypoint ${waypointNumber}: wind unavailable`;
+        }
 
         return L.divIcon({
-            className: "wind-map-direction-icon",
+            className: "waypoint-wind-map-icon",
             html: `
             <div
-                class="wind-map-direction-arrow ${speedClass}"
-                title="Wind direction ${windDirection.label}"
-                style="
-                    color: #000;
-                    text-shadow: none;
-                    -webkit-text-stroke: 2px ${outlineColor};
-                    transform: rotate(${windDirection.rotation}deg);
-                "
+                class="wind-map-waypoint-marker"
+                data-marker-state="${markerState}"
+                data-waypoint-number="${waypointNumber}"
+                ${
+                    markerState === "barb"
+                        ? `
+                data-barb-mode="${segments.mode}"
+                data-barb-knots="${segments.knots}"
+                data-barb-pennants="${segments.pennants}"
+                data-barb-full-barbs="${segments.fullBarbs}"
+                data-barb-half-barbs="${segments.halfBarbs}"
+                data-barb-rotation="${windDirection.rotation}"
+                data-barb-staff-length="${layout.staffLength}"
+                `
+                        : ""
+                }
+                title="${title}"
+                style="width:${layout.width}px;height:${layout.height}px;"
             >
-                ↑
+                <div
+                    class="wind-map-waypoint-symbol-layer ${markerState === "barb" ? "with-rotation" : ""}"
+                    style="${
+                        markerState === "barb"
+                            ? `transform: rotate(${windDirection.rotation}deg); transform-origin: ${layout.circleCenterX}px ${layout.circleCenterY}px;`
+                            : ""
+                    }"
+                >
+                    ${renderWaypointWindMarkerSvg(markerState, layout, segments)}
+                </div>
+                <span
+                    class="wind-map-waypoint-number"
+                    style="left:${layout.circleCenterX}px; top:${layout.circleCenterY}px;"
+                >
+                    ${waypointNumber}
+                </span>
             </div>
         `,
-            iconSize: [28, 28],
-            iconAnchor: [14, 42]
+            iconSize: [layout.width, layout.height],
+            iconAnchor: [layout.circleCenterX, layout.circleCenterY],
+            popupAnchor: [0, -layout.circleRadius]
         });
     }
 
-    function createWindDirectionDotIcon(windSpeed) {
-        const speedClass = getWindMapSpeedClass(windSpeed);
-        const dotColor = getWindMapOutlineColor(windSpeed);
-
-        return L.divIcon({
-            className: "wind-map-direction-icon",
-            html: `
+    function renderWeatherSituationActions({
+        regenerateOnClick = regenerateWeatherSituation,
+        actionClassName = "",
+        marginTop = "12px"
+    } = {}) {
+        return (
             <div
-                class="wind-map-direction-dot ${speedClass}"
-                title="Wind direction unavailable"
-                style="background: ${dotColor};"
-            ></div>
-        `,
-            iconSize: [15, 15],
-            iconAnchor: [7.5, 42]
-        });
+                className={`weather-situation-actions ${actionClassName}`.trim()}
+                style={{marginTop}}
+            >
+                <button
+                    className="weather-situation-action-button"
+                    onClick={regenerateOnClick}
+                >
+                    Regenerate<br />
+                    Weather Situation
+                </button>
+
+                <button
+                    className="weather-situation-action-button"
+                    onClick={saveWeatherContextJson}
+                >
+                    Download<br />
+                    JSON
+                </button>
+            </div>
+        );
     }
 
     function renderWaypointsWeatherTable() {
         if (weatherData.length === 0) return null;
 
         return (
-            <table border="1" cellPadding="8">
-                <thead>
-                <tr>
-                    <th>Waypoint #</th>
-                    <th>ETA</th>
-                    <th>Lat</th>
-                    <th>Lon</th>
-                    <th>🌡 Temp °F</th>
-                    <th>💨 Wind MPH</th>
-                    <th>↗ Wind Dir °</th>
-                    <th>💧 Humidity %</th>
-                    <th>🌧 Precipitation</th>
-                </tr>
-                </thead>
-                <tbody>
-                {weatherData.map((wp, index) => {
-                    const windDirection = getWindDirectionDisplay(wp.wind_direction_deg);
-                    const showWindDirectionReadoutAsNA = shouldShowWindDirectionReadoutAsNA(
-                        wp.wind_direction_deg
-                    );
-                    const showWindDirectionArrow = windDirection.isAvailable && !showWindDirectionReadoutAsNA;
-
-                    return (
-                        <tr key={index}>
-                            <td>WP-{index + 1}</td>
-                            <td>{wp.eta}</td>
-                            <td>{wp.lat}</td>
-                            <td>{wp.lon}</td>
-                            <td>
-                                <input
-                                    type="number"
-                                    value={wp.temperature_f ?? ""}
-                                    onChange={(e) =>
-                                        updateWeatherCell(index, "temperature_f", e.target.value)
-                                    }
-                                />
-                            </td>
-                            <td>
-                                <input
-                                    type="number"
-                                    value={wp.wind_speed_mph ?? ""}
-                                    onChange={(e) =>
-                                        updateWeatherCell(index, "wind_speed_mph", e.target.value)
-                                    }
-                                />
-                            </td>
-                            <td>
-                                <div className="wind-direction-cell">
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="360"
-                                        step="1"
-                                        value={wp.wind_direction_deg ?? ""}
-                                        aria-label={`Wind direction for waypoint ${index + 1}`}
-                                        onChange={(e) =>
-                                            updateWeatherCell(index, "wind_direction_deg", e.target.value)
-                                        }
-                                    />
-                                    <div
-                                        className={`wind-direction-readout ${
-                                            showWindDirectionArrow ? "" : "missing"
-                                        }`}
-                                        title={
-                                            showWindDirectionArrow
-                                                ? `Wind direction ${windDirection.label}`
-                                                : "Wind direction unavailable"
-                                        }
-                                    >
-                                        {showWindDirectionArrow ? (
-                                            <>
-                                                <span
-                                                    className="wind-direction-arrow"
-                                                    style={{
-                                                        transform: `rotate(${windDirection.rotation}deg)`
-                                                    }}
-                                                    aria-hidden="true"
-                                                >
-                                                    ↑
-                                                </span>
-                                                <span className="wind-direction-cardinal">
-                                                    {windDirection.label}
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <span
-                                                className="wind-direction-unknown"
-                                                aria-label="Wind direction unavailable"
-                                            >
-                                                {showWindDirectionReadoutAsNA ? "N/A" : "?"}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <input
-                                    type="number"
-                                    value={wp.humidity_pct ?? ""}
-                                    onChange={(e) =>
-                                        updateWeatherCell(index, "humidity_pct", e.target.value)
-                                    }
-                                />
-                            </td>
-                            <td>
-                                <input
-                                    type="number"
-                                    value={wp.precipitation_in ?? ""}
-                                    onChange={(e) =>
-                                        updateWeatherCell(index, "precipitation_in", e.target.value)
-                                    }
-                                />
-                            </td>
+            <div className="card waypoint-weather-table-card">
+                <div className="card-header">
+                    <h2>Weather Data Chart</h2>
+                </div>
+                <div className="waypoint-weather-table-content">
+                    <div className="waypoint-weather-table-frame">
+                        <table className="waypoint-weather-table" cellPadding="8">
+                        <thead>
+                        <tr>
+                            <th className="waypoint-number-heading">📍 Waypoint</th>
+                            <th>🕒 ETA</th>
+                            <th>↕ Lat</th>
+                            <th className="longitude-heading">↔ Lon</th>
+                            <th>🌡 Temp °F</th>
+                            <th>💨 Wind MPH</th>
+                            <th>↗ Wind Dir °</th>
+                            <th>💧 Humidity %</th>
+                            <th>🌧 Precipitation</th>
                         </tr>
-                    );
-                })}
-                </tbody>
-            </table>
+                        </thead>
+                        <tbody>
+                        {weatherData.map((wp, index) => {
+                            const windDirection = getWindDirectionDisplay(wp.wind_direction_deg);
+                            const showWindDirectionReadoutAsNA = shouldShowWindDirectionReadoutAsNA(
+                                wp.wind_direction_deg
+                            );
+                            const showWindDirectionArrow = windDirection.isAvailable && !showWindDirectionReadoutAsNA;
+
+                            return (
+                                <tr key={index}>
+                                    <td>WP-{index + 1}</td>
+                                    <td>{wp.eta}</td>
+                                    <td>{wp.lat}</td>
+                                    <td>{wp.lon}</td>
+                                    <td>
+                                        <input
+                                            type="number"
+                                            value={wp.temperature_f ?? ""}
+                                            onChange={(e) =>
+                                                updateWeatherCell(index, "temperature_f", e.target.value)
+                                            }
+                                        />
+                                    </td>
+                                    <td>
+                                        <input
+                                            type="number"
+                                            value={wp.wind_speed_mph ?? ""}
+                                            onChange={(e) =>
+                                                updateWeatherCell(index, "wind_speed_mph", e.target.value)
+                                            }
+                                        />
+                                    </td>
+                                    <td>
+                                        <div className="wind-direction-cell">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="360"
+                                                step="1"
+                                                value={wp.wind_direction_deg ?? ""}
+                                                aria-label={`Wind direction for waypoint ${index + 1}`}
+                                                onChange={(e) =>
+                                                    updateWeatherCell(index, "wind_direction_deg", e.target.value)
+                                                }
+                                            />
+                                            <div
+                                                className={`wind-direction-readout ${
+                                                    showWindDirectionArrow ? "" : "missing"
+                                                }`}
+                                                title={
+                                                    showWindDirectionArrow
+                                                        ? `Wind direction ${windDirection.label}`
+                                                        : "Wind direction unavailable"
+                                                }
+                                            >
+                                                {showWindDirectionArrow ? (
+                                                    <>
+                                                        <span
+                                                            className="wind-direction-arrow"
+                                                            style={{
+                                                                transform: `rotate(${windDirection.rotation}deg)`
+                                                            }}
+                                                            aria-hidden="true"
+                                                        >
+                                                            ↑
+                                                        </span>
+                                                        <span className="wind-direction-cardinal">
+                                                            {windDirection.label}
+                                                        </span>
+                                                    </>
+                                                ) : (
+                                                    <span
+                                                        className="wind-direction-unknown"
+                                                        aria-label="Wind direction unavailable"
+                                                    >
+                                                        {showWindDirectionReadoutAsNA ? "N/A" : "?"}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <input
+                                            type="number"
+                                            value={wp.humidity_pct ?? ""}
+                                            onChange={(e) =>
+                                                updateWeatherCell(index, "humidity_pct", e.target.value)
+                                            }
+                                        />
+                                    </td>
+                                    <td>
+                                        <input
+                                            type="number"
+                                            value={wp.precipitation_in ?? ""}
+                                            onChange={(e) =>
+                                                updateWeatherCell(index, "precipitation_in", e.target.value)
+                                            }
+                                        />
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                        </tbody>
+                        </table>
+                    </div>
+                    {renderWeatherSituationActions({
+                        regenerateOnClick: regenerateWeatherSituationAndScroll,
+                        actionClassName: "waypoint-table-actions",
+                        marginTop: "16px"
+                    })}
+                </div>
+            </div>
         );
     }
 
@@ -909,7 +1069,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     <div className="card">
                         {/* Interactive Map */}
                         <div className="card-header">
-                            <h2>Route Map</h2>
+                            <h2 ref={routeMapTitleRef}>Route Map</h2>
                         </div>
 
                         <MapContainer
@@ -929,33 +1089,16 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                 color="#26c6da"
                             />
 
-                            {weatherData.map((wp, index) => {
-                                const windDirection = getWindDirectionDisplay(wp.wind_direction_deg);
-
-                                if (shouldHideWindMapMarker(wp.wind_speed_mph, wp.wind_direction_deg)) {
-                                    return null;
-                                }
-
-                                return (
-                                    <Marker
-                                        key={`wind-direction-${index}`}
-                                        position={[wp.lat, wp.lon]}
-                                        icon={
-                                            shouldUseWindMapDot(wp.wind_speed_mph, wp.wind_direction_deg)
-                                                ? createWindDirectionDotIcon(wp.wind_speed_mph)
-                                                : createWindDirectionIcon(windDirection, wp.wind_speed_mph)
-                                        }
-                                        interactive={false}
-                                        keyboard={false}
-                                    />
-                                );
-                            })}
-
                             {weatherData.map((wp, index) => (
                                 <Marker
                                     key={index}
                                     position={[wp.lat, wp.lon]}
-                                    icon={createWaypointIcon(index + 1)}
+                                    icon={createWaypointWindMarkerIcon(
+                                        index + 1,
+                                        getWindDirectionDisplay(wp.wind_direction_deg),
+                                        wp.wind_speed_mph,
+                                        wp.wind_direction_deg
+                                    )}
                                 >
                                     <Popup>
                                         <strong>Waypoint {index + 1}</strong>
@@ -1049,6 +1192,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     {/* Weather Situation */}
                     <div style={{padding: "20px"}}>
                         <textarea
+                            ref={weatherSituationTextAreaRef}
+                            aria-label="Weather Situation"
                             value={weatherSituationText}
                             onChange={(e) => {
                                 setWeatherSituationText(e.target.value);
@@ -1060,41 +1205,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                 minHeight: "220px"
                             }}
                         />
-                        <div style={{display: "flex", justifyContent: "flex-end", marginTop: "12px"}}>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    justifyContent: "flex-end",
-                                    marginTop: "12px",
-                                    gap: "10px"
-                                }}
-                            >
-                                <button
-                                    style={{width: "190px", minWidth: "190px"}}
-                                    onClick={regenerateWeatherSituation}
-                                >
-                                    Regenerate<br />
-                                    Weather Situation
-                                </button>
-
-                                <button
-                                    onClick={saveWeatherContextJson}
-                                >
-                                    Download<br />
-                                    JSON
-                                </button>
-
-                                <button
-                                    style={{width: "auto", padding: "10px 24px"}}
-                                    onClick={() => {
-                                        console.log("<WIP> Saved forecast text:", forecastText);
-                                        alert("<WIP> Forecast text saved.");
-                                    }}
-                                >
-                                    Save 💾
-                                </button>
-                            </div>
-                        </div>
+                        {renderWeatherSituationActions()}
                     </div>
                 </div>
             )}
