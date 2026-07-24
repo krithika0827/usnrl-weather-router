@@ -203,7 +203,7 @@ def test_valid_route_returns_no_findings():
 
 def test_generator_creates_summary_from_route_data():
     # Checks that the summary uses the route metrics and avoids placeholder text.
-    summary = generate_weather_summary([
+    route = [
         make_waypoint(
             temperature_f=68,
             wind_speed_mph=12,
@@ -216,14 +216,16 @@ def test_generator_creates_summary_from_route_data():
             precipitation_in=0,
             humidity_pct=62,
         ),
-    ])
+    ]
+
+    summary = generate_weather_summary(route)
 
     assert "68.0 to 74.0 F" in summary
     assert "northeast winds" in summary
     assert "12.0 to 18.0 mph" in summary
     assert "No measurable accumulation" in summary
     assert "placeholder" not in summary.lower()
-    assert run_validation([make_waypoint()], summary) == []
+    assert run_validation(route, summary) == []
 
 
 def test_generator_mentions_vehicle_and_route_names():
