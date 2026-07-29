@@ -1,8 +1,7 @@
 # Structured tabular schemas — Owner: Joseph
 """Output schemas. Source of truth for the *output* half of docs/API_CONTRACT.md.
 
-Units are US standard: temperature °F, wind mph/degrees, precipitation inches,
-humidity %.
+Units are temperature °F, wind knots/degrees, precipitation inches, humidity %.
 This is the shape Reece renders, Krithika summarizes, and Ryan validates.
 """
 
@@ -10,7 +9,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class WaypointForecast(BaseModel):
@@ -22,7 +21,10 @@ class WaypointForecast(BaseModel):
     eta: datetime
 
     temperature_f: Optional[float] = None
-    wind_speed_mph: Optional[float] = None
+    wind_speed_knots: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices("wind_speed_knots", "wind_speed_mph"),
+    )
     wind_direction_deg: Optional[float] = None
     precipitation_in: Optional[float] = None
     humidity_pct: Optional[int] = None

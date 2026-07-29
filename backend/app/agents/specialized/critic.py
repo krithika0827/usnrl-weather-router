@@ -7,9 +7,12 @@ from app.agents.state import ValidationFinding, ValidationState
 
 # Initial thresholds for detecting sudden changes between waypoints.
 TEMPERATURE_SPIKE_F = 30
-WIND_SPIKE_MPH = 35
+WIND_SPIKE_KNOTS = 30
 HUMIDITY_SPIKE_PCT = 40
 PRECIPITATION_SPIKE_IN = 1.0
+STRONG_WIND_THRESHOLD_KNOTS = 17
+HIGH_WIND_THRESHOLD_KNOTS = 30
+UNUSUAL_WIND_THRESHOLD_KNOTS = 87
 
 
 def _point_to_dict(point: Any) -> dict:
@@ -76,7 +79,7 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         "lon",
         "eta",
         "temperature_f",
-        "wind_speed_mph",
+        "wind_speed_knots",
         "precipitation_in",
         "humidity_pct",
     ]
@@ -106,7 +109,7 @@ def validate_summary_against_route(state: ValidationState) -> dict:
             # Weather API failures may produce null metrics.
             if field in {
                 "temperature_f",
-                "wind_speed_mph",
+                "wind_speed_knots",
                 "precipitation_in",
                 "humidity_pct",
             } and point[field] is None:
@@ -120,7 +123,7 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         lat = point.get("lat")
         lon = point.get("lon")
         temp = point.get("temperature_f")
-        wind = point.get("wind_speed_mph")
+        wind = point.get("wind_speed_knots")
         precipitation = point.get("precipitation_in")
         humidity = point.get("humidity_pct")
 
@@ -155,14 +158,14 @@ def validate_summary_against_route(state: ValidationState) -> dict:
             _add_finding(
                 findings,
                 "error",
-                f"route[{index}].wind_speed_mph",
+                f"route[{index}].wind_speed_knots",
                 "Wind speed cannot be negative.",
             )
-        elif wind is not None and wind > 100:
+        elif wind is not None and wind > UNUSUAL_WIND_THRESHOLD_KNOTS:
             _add_finding(
                 findings,
                 "warning",
-                f"route[{index}].wind_speed_mph",
+                f"route[{index}].wind_speed_knots",
                 "Wind speed is unusually high and should be reviewed.",
             )
 
@@ -191,9 +194,9 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         if point.get("temperature_f") is not None
     ]
     winds = [
-        point["wind_speed_mph"]
+        point["wind_speed_knots"]
         for point in route
-        if point.get("wind_speed_mph") is not None
+        if point.get("wind_speed_knots") is not None
     ]
     precipitation_values = [
         point["precipitation_in"]
@@ -278,20 +281,20 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         # Flags strong-wind language when wind values are low.
         if (
             maximum_wind is not None
-            and maximum_wind < 20
+            and maximum_wind < STRONG_WIND_THRESHOLD_KNOTS
             and any(word in summary_lower for word in strong_wind_words)
         ):
             _add_finding(
                 findings,
                 "warning",
                 "summary",
-                "Summary describes strong winds, but route wind speeds remain below 20 mph.",
+                "Summary describes strong winds, but route wind speeds remain below 17 knots.",
             )
 
         # Flags calm-wind language when wind values are high.
         if (
             maximum_wind is not None
-            and maximum_wind >= 35
+            and maximum_wind >= HIGH_WIND_THRESHOLD_KNOTS
             and any(word in summary_lower for word in calm_wind_words)
         ):
             _add_finding(
@@ -335,8 +338,8 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         previous_temp = previous.get("temperature_f")
         current_temp = current.get("temperature_f")
 
-        previous_wind = previous.get("wind_speed_mph")
-        current_wind = current.get("wind_speed_mph")
+        previous_wind = previous.get("wind_speed_knots")
+        current_wind = current.get("wind_speed_knots")
 
         previous_humidity = previous.get("humidity_pct")
         current_humidity = current.get("humidity_pct")
@@ -365,15 +368,15 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         if (
             previous_wind is not None
             and current_wind is not None
-            and abs(current_wind - previous_wind) >= WIND_SPIKE_MPH
+            and abs(current_wind - previous_wind) >= WIND_SPIKE_KNOTS
         ):
             _add_finding(
                 findings,
                 "warning",
-                f"route[{index}].wind_speed_mph",
+                f"route[{index}].wind_speed_knots",
                 (
                     "Wind speed changes by "
-                    f"{abs(current_wind - previous_wind):.1f} mph "
+                    f"{abs(current_wind - previous_wind):.1f} knots "
                     "from the previous waypoint."
                 ),
             )

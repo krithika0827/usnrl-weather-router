@@ -1,11 +1,10 @@
 # Async parallel weather data fetching (Open-Meteo) — Owner: Joseph
 """Fetches real weather for each waypoint from the Open-Meteo forecast API.
 
-Open-Meteo returns native US units on request (°F, mph, inches), so no manual
-unit conversion is needed. Requests run in parallel (one per waypoint, capped
-at _MAX_CONCURRENCY at a time). If a
-fetch fails, that waypoint's weather fields come back null rather than failing
-the whole request — graceful degradation (NOAA fallback is added in Phase 3).
+Open-Meteo returns the requested units directly (°F, knots, inches), so no wind
+unit conversion is needed on the primary path. Requests run in parallel (one
+per waypoint, capped at _MAX_CONCURRENCY at a time). If a fetch fails, that
+waypoint's weather fields come back null rather than failing the whole request.
 """
 
 from __future__ import annotations
@@ -66,14 +65,14 @@ def _null_forecast(wp: Waypoint) -> WaypointForecast:
 
 
 def _params(wp: Waypoint) -> dict:
-    """Build the Open-Meteo query for this waypoint, requesting native US units."""
+    """Build the Open-Meteo query for this waypoint, requesting knots for wind."""
     eta_date = wp.eta.astimezone(timezone.utc).date().isoformat()
     return {
         "latitude": wp.lat,
         "longitude": wp.lon,
         "hourly": _HOURLY_FIELDS,
         "temperature_unit": "fahrenheit",
-        "wind_speed_unit": "mph",
+        "wind_speed_unit": "kn",
         "precipitation_unit": "inch",
         "timezone": "UTC",
         "start_date": eta_date,
@@ -90,7 +89,7 @@ def _from_hourly(wp: Waypoint, data: dict) -> WaypointForecast:
         lon=wp.lon,
         eta=wp.eta,
         temperature_f=_at(hourly, "temperature_2m", idx),
-        wind_speed_mph=_at(hourly, "wind_speed_10m", idx),
+        wind_speed_knots=_at(hourly, "wind_speed_10m", idx),
         wind_direction_deg=_at(hourly, "wind_direction_10m", idx),
         precipitation_in=_at(hourly, "precipitation", idx),
         humidity_pct=_round_int(_at(hourly, "relative_humidity_2m", idx)),
