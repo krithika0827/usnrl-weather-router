@@ -56,6 +56,9 @@ Wind barb branch was pointing out the wrong way (acute angle vs obtuse angle)
 Fixed overlap wind barb issue, now reads correctly
 Verify knots wind speed reports correct values
 Update tests to account for knots
+AI fixed 2 warnings
+    test_weather.py: Expected type 'datetime', got 'str' instead
+    test_agents.py: Expected type 'int', got 'None' instead
 
 In Progress:
 

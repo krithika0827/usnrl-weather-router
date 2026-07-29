@@ -1,6 +1,6 @@
 # LLM evaluation / hallucination audit tests — Owner: Ryan
-
 from datetime import datetime, timezone
+from typing import Optional
 
 from app.agents.graph import run_validation
 from app.agents.specialized.generator import generate_weather_summary
@@ -8,12 +8,12 @@ from app.models.weather_data import WaypointForecast
 
 
 def make_waypoint(
-    temperature_f=70,
-    wind_speed_knots=10,
-    wind_direction_deg=45,
-    precipitation_in=0,
-    humidity_pct=50,
-):
+    temperature_f: Optional[float] = 70,
+    wind_speed_knots: Optional[float] = 10,
+    wind_direction_deg: Optional[float] = 45,
+    precipitation_in: Optional[float] = 0,
+    humidity_pct: Optional[int] = 50,
+) -> WaypointForecast:
     # Creates a reusable sample waypoint.
     return WaypointForecast(
         lat=36.85,
