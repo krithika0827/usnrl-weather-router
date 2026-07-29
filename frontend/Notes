@@ -32,7 +32,7 @@ Pre determined weather validation test
 Improve wind direction on map display
 Accounted for missing wind data causing issues with map
 Flipped wind arrows to point to wind direction instead of wind source
-Added more special cases to account for missing/0 Wind MPH and Wind Dir
+Added more special cases to account for missing/0 Wind speed and Wind Dir
 -
 Removed 180° rotation for wind so arrows point in standard direction.
 Implemented Wind barbs inplace of arrows
@@ -48,15 +48,18 @@ Working automated tests
 ✓    Run forecast, change data (Names, waypoints) re run Forecast
 Page layout improvements
 Validate that the flags are displaying the correct speeds (Knots)
+-
+Have 1 button for genitive report and one for AI report (AI not working yet)
+Add a Reset Waypoint values button
+Switched all wind speed data to Knots
+Wind barb branch was pointing out the wrong way (acute angle vs obtuse angle)
+Fixed overlap wind barb issue, now reads correctly
+Verify knots wind speed reports correct values
+Update tests to account for knots
 
 In Progress:
 
 To do:
-Wind barb branch is pointing out the wrong way (acute angle vs obtuse angle)
-Switch all data to Knots
-Have 1 button for genitive report and one for AI report
-Add a "Reset Waypoint values" button
-stay with F
 
 Stretch goals:
 X Allow users to download a PDF report

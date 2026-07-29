@@ -117,7 +117,7 @@ async function assertPeakValuesAndTravelDetails(page, waypointCount) {
 }
 
 async function assertWeatherInputsHaveNumbers(rows, rowCount) {
-  const fieldNames = ["Temp °F", "Wind MPH", "Wind Dir °", "Humidity %", "Precipitation"];
+  const fieldNames = ["Temp °F", "Wind Knots", "Wind Dir °", "Humidity %", "Precipitation"];
 
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
     const weatherInputs = rows.nth(rowIndex).locator('input[type="number"]');
@@ -143,7 +143,7 @@ async function assertWeatherInputsMatchValues(row, expectedValues) {
   const weatherInputs = row.locator('input[type="number"]');
   const expectedInputValues = [
     expectedValues.temperature_f,
-    expectedValues.wind_speed_mph,
+    expectedValues.wind_speed_knots,
     expectedValues.wind_direction_deg,
     expectedValues.humidity_pct,
     expectedValues.precipitation_in
@@ -152,7 +152,13 @@ async function assertWeatherInputsMatchValues(row, expectedValues) {
   await expect(weatherInputs).toHaveCount(expectedInputValues.length);
 
   for (let index = 0; index < expectedInputValues.length; index++) {
-    await expect(weatherInputs.nth(index)).toHaveValue(String(expectedInputValues[index]));
+    const expectedValue = expectedInputValues[index];
+    if (expectedValue instanceof RegExp) {
+      await expect(weatherInputs.nth(index)).toHaveValue(expectedValue);
+      continue;
+    }
+
+    await expect(weatherInputs.nth(index)).toHaveValue(String(expectedValue));
   }
 }
 
@@ -160,12 +166,12 @@ async function assertWaypointEndpoints(rows, waypoints) {
   const firstWaypoint = waypoints[0];
   const lastWaypoint = waypoints[waypoints.length - 1];
 
-  await expect(rows.first().locator("td").nth(0)).toHaveText("WP-1");
+  await expect(rows.first().locator(".waypoint-name-cell span")).toHaveText("WP-1");
   await expect(rows.first().locator("td").nth(1)).toHaveText(firstWaypoint.eta);
   await expect(rows.first().locator("td").nth(2)).toHaveText(String(firstWaypoint.lat));
   await expect(rows.first().locator("td").nth(3)).toHaveText(String(firstWaypoint.lon));
 
-  await expect(rows.last().locator("td").nth(0)).toHaveText(`WP-${waypoints.length}`);
+  await expect(rows.last().locator(".waypoint-name-cell span")).toHaveText(`WP-${waypoints.length}`);
   await expect(rows.last().locator("td").nth(1)).toHaveText(lastWaypoint.eta);
   await expect(rows.last().locator("td").nth(2)).toHaveText(String(lastWaypoint.lat));
   await expect(rows.last().locator("td").nth(3)).toHaveText(String(lastWaypoint.lon));
@@ -178,7 +184,7 @@ test("Small forecast test with data validation", async ({ page }) => {
   const expectedWeather = {
     ...smallWaypoints[0],
     temperature_f: 77,
-    wind_speed_mph: 3.2,
+    wind_speed_knots: 2.8,
     wind_direction_deg: 146,
     humidity_pct: 90,
     precipitation_in: 0
@@ -199,6 +205,59 @@ test("Small forecast test with data validation", async ({ page }) => {
   await assertWaypointEndpoints(rows, smallWaypoints);
 
   await assertPeakValuesAndTravelDetails(page, smallWaypoints.length);
+});
+
+test("Wind barb feathers angle outward from the staff", async ({ page }) => {
+  await openAndRunForecast(page);
+
+  const firstFeather = page.locator(".wind-map-waypoint-barb-feather").first();
+  await expect(firstFeather).toBeVisible();
+
+  const y1 = Number(await firstFeather.getAttribute("y1"));
+  const y2 = Number(await firstFeather.getAttribute("y2"));
+
+  expect(Number.isFinite(y1)).toBe(true);
+  expect(Number.isFinite(y2)).toBe(true);
+  expect(y2).toBeLessThan(y1);
+});
+
+test("Wind barb pennants and feathers have visible spacing between them", async ({ page }) => {
+  await openAndRunForecast(page);
+
+  const weatherTable = page
+    .locator("table")
+    .filter({ hasText: "Temp °F" })
+    .first();
+  const firstRowInputs = weatherTable.locator("tbody tr").first().locator('input[type="number"]');
+
+  await firstRowInputs.nth(1).fill("65");
+
+  const firstMarker = page.locator('[data-waypoint-number="1"]').first();
+  const firstPennant = firstMarker.locator(".wind-map-waypoint-barb-pennant").first();
+  const feathers = firstMarker.locator(".wind-map-waypoint-barb-feather");
+  const firstFeather = feathers.first();
+  const secondFeather = feathers.nth(1);
+
+  await expect(firstPennant).toBeVisible();
+  await expect(firstFeather).toBeVisible();
+  await expect(secondFeather).toBeVisible();
+
+  const points = (await firstPennant.getAttribute("points")) ?? "";
+  const pennantBottomY = Math.max(
+    ...points
+      .trim()
+      .split(/\s+/)
+      .map((pair) => Number(pair.split(",")[1]))
+  );
+  const firstFeatherY1 = Number(await firstFeather.getAttribute("y1"));
+  const secondFeatherY1 = Number(await secondFeather.getAttribute("y1"));
+  const pennantToFirstFeatherGap = firstFeatherY1 - pennantBottomY;
+  const featherToFeatherGap = secondFeatherY1 - firstFeatherY1;
+
+  expect(Number.isFinite(pennantBottomY)).toBe(true);
+  expect(Number.isFinite(firstFeatherY1)).toBe(true);
+  expect(Number.isFinite(secondFeatherY1)).toBe(true);
+  expect(pennantToFirstFeatherGap).toBe(featherToFeatherGap);
 });
 
 // 5 waypoints (Default) (confirm no errors)
@@ -293,7 +352,7 @@ test("Edit data test @headed", async ({ page }) => {
   ]);
 
   await page
-    .getByRole("button", { name: /regenerate\s*weather situation/i })
+    .getByRole("button", { name: /regenerate\s*genitive report/i })
     .first()
     .click();
 
@@ -301,7 +360,7 @@ test("Edit data test @headed", async ({ page }) => {
   await expect(weatherSituation).toHaveValue(new RegExp(vehicleName));
   await expect(weatherSituation).toHaveValue(new RegExp(routeName));
   await expect(weatherSituation).toHaveValue(/near 1\.0 F/);
-  await expect(weatherSituation).toHaveValue(/near 1\.0 mph/);
+  await expect(weatherSituation).toHaveValue(/near 1\.0 knots/);
   await expect(weatherSituation).toHaveValue(/amounts near 1\.00 in/);
   await expect(weatherSituation).toHaveValue(/Relative humidity is near 1%/);
 });
