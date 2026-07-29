@@ -92,6 +92,21 @@ def test_negative_wind_speed_returns_error():
     )
 
 
+def test_unusually_high_wind_speed_returns_warning():
+    # Checks that unusually high wind speeds are flagged for review.
+    findings = run_validation(
+        [make_waypoint(wind_speed_knots=90)],
+        "Strong winds are expected.",
+    )
+
+    assert any(
+        finding["severity"] == "warning"
+        and finding["field"] == "route[0].wind_speed_knots"
+        and "unusually high" in finding["message"]
+        for finding in findings
+    )
+
+
 def test_invalid_humidity_returns_error():
     # Checks that humidity outside 0 to 100 is invalid.
     findings = run_validation(
@@ -238,6 +253,48 @@ def test_generator_mentions_vehicle_and_route_names():
 
     assert "Borealis" in summary
     assert "Kessel Run" in summary
+
+
+def test_summary_number_validation_checks_knots_values():
+    # Checks that summary wind values are validated against route values in knots.
+    findings = run_validation(
+        [make_waypoint(wind_speed_knots=10)],
+        "Wind conditions indicate light northeast winds near 999 knots.",
+    )
+
+    assert any(
+        finding["field"] == "summary"
+        and "999 knots" in finding["message"]
+        for finding in findings
+    )
+
+
+def test_strong_wind_summary_with_low_knots_returns_warning():
+    # Checks strong-wind wording against low route wind values in knots.
+    findings = run_validation(
+        [make_waypoint(wind_speed_knots=10)],
+        "Strong winds are expected along the route.",
+    )
+
+    assert any(
+        finding["field"] == "summary"
+        and "below 17 knots" in finding["message"]
+        for finding in findings
+    )
+
+
+def test_light_wind_summary_with_high_knots_returns_warning():
+    # Checks calm/light wording against high route wind values in knots.
+    findings = run_validation(
+        [make_waypoint(wind_speed_knots=35)],
+        "Light winds are expected along the route.",
+    )
+
+    assert any(
+        finding["field"] == "summary"
+        and "contains high wind speeds" in finding["message"]
+        for finding in findings
+    )
 
 
 def test_generator_uses_single_value_wording_when_there_is_no_range():

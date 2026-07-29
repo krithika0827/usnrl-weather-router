@@ -79,7 +79,7 @@ def _check_summary_weather_numbers(
     # Checks weather numbers in the summary against raw route data.
     unit_values = {
         "f": temperatures,
-        "mph": winds,
+        "knots": winds,
         "in": precipitation_values,
         "%": humidity_values,
     }
@@ -87,7 +87,7 @@ def _check_summary_weather_numbers(
     unit_boundary = r"(?=\s|[.,;:]|$)"
 
     range_pattern = re.compile(
-        r"(-?\d+(?:\.\d+)?)\s*(?:to|-)\s*(-?\d+(?:\.\d+)?)\s*(f|mph|in|%)"
+        r"(-?\d+(?:\.\d+)?)\s*(?:to|-)\s*(-?\d+(?:\.\d+)?)\s*(f|knots|in|%)"
         + unit_boundary,
         re.IGNORECASE,
     )
@@ -105,7 +105,7 @@ def _check_summary_weather_numbers(
                 _add_summary_number_warning(findings, value, unit)
 
     single_pattern = re.compile(
-        r"(-?\d+(?:\.\d+)?)\s*(f|mph|in|%)" + unit_boundary,
+        r"(-?\d+(?:\.\d+)?)\s*(f|knots|in|%)" + unit_boundary,
         re.IGNORECASE,
     )
 
