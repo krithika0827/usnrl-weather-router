@@ -165,11 +165,13 @@ function App() {
 
             setVehicleName(weatherContext.vehicleName ?? "");
             setRouteName(weatherContext.routeName ?? "");
+            setSummaryMode(weatherContext.summaryMode ?? "deterministic");
             setWaypointsText(JSON.stringify(importedWaypoints, null, 2));
             setWeatherData(importedRoute);
             setForecastText(importedForecastText);
             setWeatherSituationText(importedForecastText);
             setValidationFindings(weatherContext.validation ?? []);
+            setSummaryStatus("");
             setError("");
         } catch (err) {
             setError(`Could not upload JSON: ${err.message}`);
@@ -183,6 +185,7 @@ function App() {
         return {
             vehicleName,
             routeName,
+            summaryMode,
             summary: forecastText,
             validation: validationFindings,
             peakValues: {
@@ -220,6 +223,7 @@ function App() {
         }
 
         setError("");
+        setSummaryStatus("");
         setLoading(true);
         try {
             const response = await fetchWithTimeout("http://localhost:8000/api/v1/summary", {
@@ -230,7 +234,8 @@ function App() {
                 body: JSON.stringify({
                     route: weatherData,
                     vehicle_name: vehicleName,
-                    route_name: routeName
+                    route_name: routeName,
+                    summary_mode: summaryMode
                 })
             });
             const data = await response.json();
@@ -239,6 +244,9 @@ function App() {
                 return;
             }
             setValidationFindings(data.validation ?? []);
+            setSummaryStatus(
+                `Weather Situation regenerated using ${data.summary_mode === "gemini" ? "Gemini" : "the deterministic generator"}.`
+            );
             if (data.summary) {
                 setForecastText(data.summary);
                 setWeatherSituationText(data.summary);
@@ -280,6 +288,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     const [validationFindings, setValidationFindings] = useState([]);
     const [vehicleName, setVehicleName] = useState("Borealis");
     const [routeName, setRouteName] = useState("Kessel Run");
+    const [summaryMode, setSummaryMode] = useState("deterministic");
+    const [summaryStatus, setSummaryStatus] = useState("");
     const jsonUploadInputRef = useRef(null);
     const routeMapTitleRef = useRef(null);
     const weatherSituationTextAreaRef = useRef(null);
@@ -372,6 +382,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     // Submit waypoints to the forecast API and load returned route weather data.
     async function runForecast() {
         setError("");
+        setSummaryStatus("");
         setLoading(true);
         try {
             const waypoints = JSON.parse(waypointsText);
@@ -383,7 +394,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                 body: JSON.stringify({
                     waypoints: waypoints,
                     vehicle_name: vehicleName,
-                    route_name: routeName
+                    route_name: routeName,
+                    summary_mode: summaryMode
                 })
             });
             const data = await response.json();
@@ -395,6 +407,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             }
             setWeatherData(data.route);
             setValidationFindings(data.validation ?? []);
+            setSummaryStatus(
+                `Forecast generated using ${data.summary_mode === "gemini" ? "Gemini" : "the deterministic generator"}.`
+            );
             if (data.summary) {
                 setForecastText(data.summary);
                 setWeatherSituationText(data.summary);
@@ -783,9 +798,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                 <button
                     className="weather-situation-action-button"
                     onClick={regenerateOnClick}
+                    disabled={loading}
                 >
-                    Regenerate<br />
-                    Weather Situation
+                    {loading ? "Generating..." : <>Regenerate<br />Weather Situation</>}
                 </button>
 
                 <button
@@ -1005,6 +1020,26 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                             />
                         </div>
                         <div>
+                            <label
+                                htmlFor="summary-mode"
+                                style={{
+                                    display: "block",
+                                    marginBottom: "6px",
+                                    fontWeight: "bold"
+                                }}
+                            >
+                                Summary Generator
+                            </label>
+                            <select
+                                id="summary-mode"
+                                value={summaryMode}
+                                onChange={(e) => setSummaryMode(e.target.value)}
+                            >
+                                <option value="deterministic">Deterministic</option>
+                                <option value="gemini">Gemini (Google AI Studio)</option>
+                            </select>
+                        </div>
+                        <div>
                             {/* Input Route Name */}
                             <label
                                 style={{
@@ -1206,6 +1241,11 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                             }}
                         />
                         {renderWeatherSituationActions()}
+                        {summaryStatus && (
+                            <p className="summary-generation-status" role="status">
+                                {summaryStatus}
+                            </p>
+                        )}
                     </div>
                 </div>
             )}

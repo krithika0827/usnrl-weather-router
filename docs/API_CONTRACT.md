@@ -29,6 +29,7 @@ time of arrival (ISO 8601, UTC).
 {
   "vehicle_name": "Borealis",
   "route_name": "Kessel Run",
+  "summary_mode": "deterministic",
   "waypoints": [
     { "lat": 36.85, "lon": -76.30, "eta": "2026-06-10T14:00:00Z" },
     { "lat": 35.22, "lon": -75.55, "eta": "2026-06-10T20:00:00Z" },
@@ -46,6 +47,7 @@ time of arrival (ISO 8601, UTC).
 | `eta` | valid ISO 8601 timestamp |
 | `waypoints` | at least 1, at most 50 |
 | ordering | `eta` values non-decreasing (in chronological order) |
+| `summary_mode` | `deterministic` (default) or `gemini` |
 
 ### Output
 
@@ -64,6 +66,7 @@ time of arrival (ISO 8601, UTC).
     }
   ],
   "summary": "Borealis on route Kessel Run is forecast across 1 waypoint(s) from 2026-06-10 14:00 UTC near 36.85, -76.30 to 2026-06-10 14:00 UTC near 36.85, -76.30. Temperatures are expected to be mild near 75.4 F. Wind conditions indicate light northeast winds near 11.2 mph. No measurable accumulation is indicated at the route waypoints. Relative humidity is near 65%. Overall operational weather risk appears limited based on the provided metrics.",
+  "summary_mode": "deterministic",
   "validation": []
 }
 ```
@@ -79,6 +82,7 @@ time of arrival (ISO 8601, UTC).
 | `route[].precipitation_in` | number \| null | Joseph | inches |
 | `route[].humidity_pct` | integer \| null | Joseph | relative humidity % |
 | `summary` | string \| null | Krithika | Generated forecast discussion from the route table |
+| `summary_mode` | string | backend | Generator that actually produced the summary (`deterministic` or `gemini`) |
 | `validation` | array | Ryan | Review-agent findings |
 
 Every weather field is **nullable**: if a source is unavailable for a waypoint,
@@ -99,6 +103,7 @@ preserved.
 {
   "vehicle_name": "Borealis",
   "route_name": "Kessel Run",
+  "summary_mode": "gemini",
   "route": [
     {
       "lat": 36.85,
@@ -117,6 +122,11 @@ preserved.
 ### Output
 
 Uses the same `ForecastResponse` envelope as `/forecast`.
+
+When `summary_mode` is `gemini`, the backend sends only the route table and
+optional names to Gemini using its server-side `GEMINI_API_KEY`. If Gemini is
+not configured or unavailable, the response uses the deterministic summary and
+includes a `validation` warning explaining the fallback.
 
 ### `validation` entry shape
 

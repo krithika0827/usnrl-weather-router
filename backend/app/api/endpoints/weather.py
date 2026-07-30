@@ -13,10 +13,10 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.agents.graph import run_validation
-from app.agents.specialized.generator import generate_weather_summary
 from app.models.waypoint import RouteRequest
-from app.models.weather_data import ForecastResponse, WaypointForecast
+from app.models.weather_data import ForecastResponse, SummaryMode, WaypointForecast
 from app.services import open_meteo
+from app.services.summary_generator import generate_summary
 
 router = APIRouter()
 
@@ -27,6 +27,7 @@ class SummaryRequest(BaseModel):
     route: list[WaypointForecast]
     vehicle_name: str | None = None
     route_name: str | None = None
+    summary_mode: SummaryMode = SummaryMode.deterministic
 
 
 @router.post("/forecast", response_model=ForecastResponse)
@@ -34,25 +35,35 @@ async def create_forecast(request: RouteRequest) -> ForecastResponse:
     """Validate a route and return a forecast product for each waypoint."""
     route = await open_meteo.fetch_forecasts(request.waypoints)
 
-    summary = generate_weather_summary(
-        route,
-        vehicle_name=request.vehicle_name,
-        route_name=request.route_name,
+    generation = await generate_summary(
+        route, request.vehicle_name, request.route_name, request.summary_mode
     )
-    validation = run_validation(route, summary)
+    validation = run_validation(route, generation.summary)
+    if generation.warning:
+        validation.insert(0, {"severity": "warning", "field": "summary", "message": generation.warning})
 
-    return ForecastResponse(route=route, summary=summary, validation=validation)
+    return ForecastResponse(
+        route=route,
+        summary=generation.summary,
+        summary_mode=generation.mode,
+        validation=validation,
+    )
 
 
 @router.post("/summary", response_model=ForecastResponse)
 async def create_summary(request: SummaryRequest) -> ForecastResponse:
     """Generate a summary from already-loaded or manually edited weather data."""
     route = request.route
-    summary = generate_weather_summary(
-        route,
-        vehicle_name=request.vehicle_name,
-        route_name=request.route_name,
+    generation = await generate_summary(
+        route, request.vehicle_name, request.route_name, request.summary_mode
     )
-    validation = run_validation(route, summary)
+    validation = run_validation(route, generation.summary)
+    if generation.warning:
+        validation.insert(0, {"severity": "warning", "field": "summary", "message": generation.warning})
 
-    return ForecastResponse(route=route, summary=summary, validation=validation)
+    return ForecastResponse(
+        route=route,
+        summary=generation.summary,
+        summary_mode=generation.mode,
+        validation=validation,
+    )

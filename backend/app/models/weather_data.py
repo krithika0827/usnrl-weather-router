@@ -34,6 +34,13 @@ class Severity(str, Enum):
     error = "error"
 
 
+class SummaryMode(str, Enum):
+    """Supported routes for generating the forecast narrative."""
+
+    deterministic = "deterministic"
+    gemini = "gemini"
+
+
 class ValidationIssue(BaseModel):
     """A consistency finding produced by the review agents (Ryan, Week 5)."""
 
@@ -48,5 +55,8 @@ class ForecastResponse(BaseModel):
     route: list[WaypointForecast]
     # Filled by Krithika's AI discussion (Week 4); null until then.
     summary: Optional[str] = None
+    # The generator that actually produced `summary`; Gemini fallbacks report
+    # `deterministic` so the frontend can communicate it clearly.
+    summary_mode: SummaryMode = SummaryMode.deterministic
     # Filled by Ryan's review agents (Week 5); empty until then.
     validation: list[ValidationIssue] = Field(default_factory=list)

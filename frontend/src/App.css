@@ -97,7 +97,8 @@ textarea:focus {
     border-color: var(--accent);
 }
 
-input {
+input,
+select {
     width: 100%;
     background: #060f1e;
     color: var(--text);
@@ -108,7 +109,8 @@ input {
     outline: none;
 }
 
-input:focus {
+input:focus,
+select:focus {
     border-color: var(--accent);
 }
 
@@ -146,6 +148,12 @@ button:disabled {
 .weather-situation-action-button {
     width: 190px;
     min-width: 190px;
+}
+
+.summary-generation-status {
+    margin-top: 12px;
+    color: var(--accent-secondary);
+    font-weight: 600;
 }
 
 .waypoint-weather-table-content {

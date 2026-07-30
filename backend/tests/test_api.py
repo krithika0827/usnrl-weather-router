@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.weather_data import WaypointForecast
+from app.services import summary_generator
 
 client = TestClient(app)
 
@@ -89,6 +90,44 @@ def test_summary_uses_current_table_values_without_fetching(monkeypatch):
     assert "light northeast winds near 1.0 mph" in body["summary"]
     assert "amounts near 1.00 in" in body["summary"]
     assert "Relative humidity is near 1%" in body["summary"]
+
+
+def test_gemini_mode_without_key_falls_back_to_deterministic(monkeypatch):
+    """A missing local API key never makes the summary endpoint fail."""
+    monkeypatch.setattr("app.services.summary_generator.settings.gemini_api_key", None)
+    r = client.post(
+        "/api/v1/summary",
+        json={
+            "route": [{
+                "lat": 36.85, "lon": -76.30, "eta": "2026-06-08T12:00:00Z",
+                "temperature_f": 70, "wind_speed_mph": 8,
+                "wind_direction_deg": 45, "precipitation_in": 0, "humidity_pct": 60,
+            }],
+            "summary_mode": "gemini",
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert "70.0 F" in body["summary"]
+    assert body["summary_mode"] == "deterministic"
+    assert any("GEMINI_API_KEY" in finding["message"] for finding in body["validation"])
+
+
+@pytest.mark.asyncio
+async def test_gemini_mode_uses_provider_when_configured(monkeypatch):
+    """Gemini mode uses the provider result before the validation workflow."""
+    monkeypatch.setattr(summary_generator.settings, "gemini_api_key", "test-key")
+    monkeypatch.setattr(
+        summary_generator,
+        "_generate_with_gemini",
+        lambda *_args: "Gemini route summary.",
+    )
+    result = await summary_generator.generate_summary(
+        [], None, None, "gemini"
+    )
+    assert result.summary == "Gemini route summary."
+    assert result.mode == "gemini"
+    assert result.warning is None
 
 
 def test_rejects_latitude_out_of_range():
