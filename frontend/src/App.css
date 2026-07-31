@@ -300,8 +300,23 @@ tbody tr:hover td {
     border: 0;
 }
 
+.leaflet-marker-icon.waypoint-wind-map-icon.leaflet-interactive {
+    pointer-events: none;
+}
+
 .wind-map-waypoint-marker {
     position: relative;
+    pointer-events: none;
+}
+
+.wind-map-waypoint-hit-area {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: transparent;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 1;
 }
 
 .wind-map-waypoint-symbol-layer,

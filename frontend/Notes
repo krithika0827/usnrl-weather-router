@@ -63,6 +63,14 @@ resolved merge conflicts
 Resolved Blocking and Cleanup reported by mightyjoey in Pull Request notes
 Add shared wind threshold constants TO GIT FILES
 mightyjoey helped resolved the remaining file conflicts
+-
+Removed unnecessary waits in tests
+Updated tests so all run headless now
+Removed emojis and updated text to look professional
+removed WP-1 text in favor of cleaner just numbers format
+Improves map hover over waypoint detection
+Updated test to account for changed text and removed emojis
+Added a small "AI Report"/"Generative Report" text to specify what report type is shown
 
 In Progress:
 

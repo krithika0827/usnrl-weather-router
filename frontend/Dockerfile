@@ -9,6 +9,8 @@ RUN npm install
 
 # Copy the app.
 COPY . .
+ARG REACT_APP_API_BASE_URL=http://localhost:8000
+ENV REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL
 RUN npm run build
 
 # Production image

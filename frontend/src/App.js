@@ -14,6 +14,10 @@ import {
 import L from "leaflet";
 
 const API_REQUEST_TIMEOUT_MS = 20000;
+const DEFAULT_API_BASE_URL = "http://localhost:8000";
+const GENERATIVE_REPORT_TYPE = "generative";
+const AI_REPORT_TYPE = "ai";
+const AI_REPORT_WIP_TEXT = "AI Report generation is still WIP.";
 const EDITABLE_WEATHER_FIELDS = [
     "temperature_f",
     "wind_speed_knots",
@@ -24,6 +28,31 @@ const EDITABLE_WEATHER_FIELDS = [
 
 function cloneRouteWeatherData(route) {
     return route.map((wp) => ({...wp}));
+}
+
+function normalizeWeatherSituationReportType(value) {
+    if (typeof value !== "string") return GENERATIVE_REPORT_TYPE;
+
+    const normalizedValue = value.trim().toLowerCase();
+    return normalizedValue === AI_REPORT_TYPE || normalizedValue === "ai report"
+        ? AI_REPORT_TYPE
+        : GENERATIVE_REPORT_TYPE;
+}
+
+function getWeatherSituationReportTypeLabel(reportType) {
+    return normalizeWeatherSituationReportType(reportType) === AI_REPORT_TYPE
+        ? "AI Report"
+        : "Generative Report";
+}
+
+function getApiBaseUrl() {
+    const configuredBaseUrl = process.env.REACT_APP_API_BASE_URL?.trim();
+    return (configuredBaseUrl || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+}
+
+function buildApiUrl(path) {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    return `${getApiBaseUrl()}${normalizedPath}`;
 }
 
 async function fetchWithTimeout(url, options) {
@@ -173,6 +202,11 @@ function App() {
                 eta: wp.eta
             }));
             const importedForecastText = weatherContext.summary ?? "";
+            const importedReportType =
+                weatherContext.reportType ??
+                (importedForecastText === AI_REPORT_WIP_TEXT
+                    ? AI_REPORT_TYPE
+                    : GENERATIVE_REPORT_TYPE);
 
             setVehicleName(weatherContext.vehicleName ?? "");
             setRouteName(weatherContext.routeName ?? "");
@@ -181,6 +215,9 @@ function App() {
             setOriginalWeatherData(cloneRouteWeatherData(importedRoute));
             setForecastText(importedForecastText);
             setWeatherSituationText(importedForecastText);
+            setWeatherSituationReportType(
+                normalizeWeatherSituationReportType(importedReportType)
+            );
             setValidationFindings(weatherContext.validation ?? []);
             setError("");
         } catch (err) {
@@ -195,6 +232,7 @@ function App() {
         return {
             vehicleName,
             routeName,
+            reportType: weatherSituationReportType,
             summary: forecastText,
             validation: validationFindings,
             peakValues: {
@@ -234,7 +272,7 @@ function App() {
         setError("");
         setLoading(true);
         try {
-            const response = await fetchWithTimeout("http://localhost:8000/api/v1/summary", {
+            const response = await fetchWithTimeout(buildApiUrl("/api/v1/summary"), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -254,6 +292,7 @@ function App() {
             if (data.summary) {
                 setForecastText(data.summary);
                 setWeatherSituationText(data.summary);
+                setWeatherSituationReportType(GENERATIVE_REPORT_TYPE);
             }
         } catch (err) {
             setError(err.message);
@@ -268,10 +307,10 @@ function App() {
     }
 
     function regenerateAiWeatherSituation() {
-        const aiReportWipText = "AI Report generation is still WIP.";
         setError("");
-        setForecastText(aiReportWipText);
-        setWeatherSituationText(aiReportWipText);
+        setForecastText(AI_REPORT_WIP_TEXT);
+        setWeatherSituationText(AI_REPORT_WIP_TEXT);
+        setWeatherSituationReportType(AI_REPORT_TYPE);
     }
 
     function regenerateAiWeatherSituationAndScroll() {
@@ -300,6 +339,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     const [originalWeatherData, setOriginalWeatherData] = useState([]);
     const [forecastText, setForecastText] = useState(placeHolderText);
     const [weatherSituationText, setWeatherSituationText] = useState(placeHolderText);
+    const [weatherSituationReportType, setWeatherSituationReportType] = useState(
+        GENERATIVE_REPORT_TYPE
+    );
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [validationFindings, setValidationFindings] = useState([]);
@@ -421,7 +463,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         setLoading(true);
         try {
             const waypoints = JSON.parse(waypointsText);
-            const response = await fetchWithTimeout("http://localhost:8000/api/v1/forecast", {
+            const response = await fetchWithTimeout(buildApiUrl("/api/v1/forecast"), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -447,6 +489,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             if (data.summary) {
                 setForecastText(data.summary);
                 setWeatherSituationText(data.summary);
+                setWeatherSituationReportType(GENERATIVE_REPORT_TYPE);
             }
         } catch (err) {
             setError(err.message);
@@ -798,9 +841,18 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                 `
                         : ""
                 }
-                title="${title}"
                 style="width:${layout.width}px;height:${layout.height}px;"
             >
+                <div
+                    class="wind-map-waypoint-hit-area"
+                    title="${title}"
+                    style="
+                        left:${layout.circleCenterX}px;
+                        top:${layout.circleCenterY}px;
+                        width:${layout.circleRadius * 2}px;
+                        height:${layout.circleRadius * 2}px;
+                    "
+                ></div>
                 <div
                     class="wind-map-waypoint-symbol-layer ${markerState === "barb" ? "with-rotation" : ""}"
                     style="${
@@ -883,15 +935,15 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                         <table className="waypoint-weather-table" cellPadding="8">
                         <thead>
                         <tr>
-                            <th className="waypoint-number-heading">📍 Waypoint</th>
-                            <th>🕒 ETA</th>
-                            <th>↕ Lat</th>
-                            <th className="longitude-heading">↔ Lon</th>
-                            <th>🌡 Temp °F</th>
-                            <th>💨 Wind Knots</th>
-                            <th>↗ Wind Dir °</th>
-                            <th>💧 Humidity %</th>
-                            <th>🌧 Precipitation</th>
+                            <th className="waypoint-number-heading">Waypoint</th>
+                            <th>ETA</th>
+                            <th>Lat</th>
+                            <th className="longitude-heading">Lon</th>
+                            <th>Temp °F</th>
+                            <th>Wind kts</th>
+                            <th>Wind Direction°</th>
+                            <th>Humidity %</th>
+                            <th>Precipitation in</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -907,7 +959,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                 <tr key={index}>
                                     <td>
                                         <div className="waypoint-name-cell">
-                                            <span>WP-{index + 1}</span>
+                                            <span>{index + 1}</span>
                                             <button
                                                 type="button"
                                                 className="waypoint-reset-button"
@@ -1216,28 +1268,28 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
                             <div className="peak-grid">
                                 <div className="peak-cell">
-                                    <div className="peak-label">🌡 Temperature</div>
+                                    <div className="peak-label">Temperature 🌡</div>
                                     <div className="peak-value">
                                         {formatRange(minTemp, maxTemp)}
                                     </div>
                                     <div className="peak-sub">Min / Max °F</div>
                                 </div>
                                 <div className="peak-cell">
-                                    <div className="peak-label">💨 Wind</div>
+                                    <div className="peak-label">Wind 💨</div>
                                     <div className="peak-value">
                                         {formatRange(minWind, maxWind)}
                                     </div>
                                     <div className="peak-sub">Min / Max knots</div>
                                 </div>
                                 <div className="peak-cell">
-                                    <div className="peak-label">💧 Humidity</div>
+                                    <div className="peak-label">Humidity 💧</div>
                                     <div className="peak-value">
                                         {formatRange(minHumidity, maxHumidity)}
                                     </div>
                                     <div className="peak-sub">Min / Max %</div>
                                 </div>
                                 <div className="peak-cell">
-                                    <div className="peak-label">🌧 Precipitation</div>
+                                    <div className="peak-label">Precipitation 🌧</div>
                                     <div className="peak-value">
                                         {formatRange(minPrecip, maxPrecip)}
                                     </div>
@@ -1273,6 +1325,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                 <div className="card">
                     <div className="card-header">
                         <h2>Weather Situation</h2>
+                        <span className="badge muted">
+                            {getWeatherSituationReportTypeLabel(weatherSituationReportType)}
+                        </span>
                         <span className="badge muted">Editable</span>
                     </div>
                     {/* Weather Situation */}

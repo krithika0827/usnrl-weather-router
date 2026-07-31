@@ -74,7 +74,7 @@ const waypointsTextOversize = `[
     { "lat": -58.96, "lon": -64.18, "eta": "2026-07-22T03:00:00Z" }
 ]`;
 
-const largeForecastBrowserWaitMs = 5000;
+const largeForecastBrowserWaitMs = 0;
 
 test.afterEach(async ({ page }, testInfo) => {
   if (testInfo.title.includes("Large forecast test") && !page.isClosed()) {
@@ -166,12 +166,12 @@ async function assertWaypointEndpoints(rows, waypoints) {
   const firstWaypoint = waypoints[0];
   const lastWaypoint = waypoints[waypoints.length - 1];
 
-  await expect(rows.first().locator(".waypoint-name-cell span")).toHaveText("WP-1");
+  await expect(rows.first().locator(".waypoint-name-cell span")).toHaveText("1");
   await expect(rows.first().locator("td").nth(1)).toHaveText(firstWaypoint.eta);
   await expect(rows.first().locator("td").nth(2)).toHaveText(String(firstWaypoint.lat));
   await expect(rows.first().locator("td").nth(3)).toHaveText(String(firstWaypoint.lon));
 
-  await expect(rows.last().locator(".waypoint-name-cell span")).toHaveText(`WP-${waypoints.length}`);
+  await expect(rows.last().locator(".waypoint-name-cell span")).toHaveText(String(waypoints.length));
   await expect(rows.last().locator("td").nth(1)).toHaveText(lastWaypoint.eta);
   await expect(rows.last().locator("td").nth(2)).toHaveText(String(lastWaypoint.lat));
   await expect(rows.last().locator("td").nth(3)).toHaveText(String(lastWaypoint.lon));
@@ -184,7 +184,7 @@ test("Small forecast test with data validation", async ({ page }) => {
   const expectedWeather = {
     ...smallWaypoints[0],
     temperature_f: 77,
-    wind_speed_knots: 2.8,
+    wind_speed_knots: 2.8, // updated from mph and confirmed value
     wind_direction_deg: 146,
     humidity_pct: 90,
     precipitation_in: 0
@@ -219,6 +219,21 @@ test("Wind barb feathers angle outward from the staff", async ({ page }) => {
   expect(Number.isFinite(y1)).toBe(true);
   expect(Number.isFinite(y2)).toBe(true);
   expect(y2).toBeLessThan(y1);
+});
+
+test("Weather Situation shows the current report type", async ({ page }) => {
+  await openAndRunForecast(page);
+
+  const weatherSituationCard = page.locator(".card").filter({ hasText: "Weather Situation" }).first();
+
+  await expect(weatherSituationCard).toContainText("Generative Report");
+
+  await page
+    .getByRole("button", { name: /regenerate\s*ai report/i })
+    .first()
+    .click();
+
+  await expect(weatherSituationCard).toContainText("AI Report");
 });
 
 test("Wind barb pennants and feathers have visible spacing between them", async ({ page }) => {
@@ -284,7 +299,7 @@ test("Prefilled waypoints test", async ({ page }) => {
 });
 
 // 50 waypoints (confirm no missing values)
-test("Large forecast test @headed", async ({ page }, testInfo) => {
+test("Large forecast test", async ({ page }, testInfo) => {
   testInfo.setTimeout(largeForecastBrowserWaitMs + 120000);
 
   const largeWaypoints = createRandomWaypoints();
@@ -306,7 +321,7 @@ test("Large forecast test @headed", async ({ page }, testInfo) => {
 });
 
 // 52 waypoints (confirm validation error)
-test("Oversize forecast test @headed", async ({ page }) => {
+test("Oversize forecast test", async ({ page }) => {
   await openAndRunForecast(page, waypointsTextOversize);
 
   await expect(
@@ -317,7 +332,7 @@ test("Oversize forecast test @headed", async ({ page }) => {
 });
 
 // Run forecast, update data and regenerate Weather Situation
-test("Edit data test @headed", async ({ page }) => {
+test("Edit data test", async ({ page }) => {
   await openAndRunForecast(page);
 
   const vehicleName = "Edit Test Vessel";
