@@ -61,7 +61,8 @@ AI fixed 2 warnings
     test_agents.py: Expected type 'int', got 'None' instead
 resolved merge conflicts
 Resolved Blocking and Cleanup reported by mightyjoey in Pull Request notes
-Add shared wind threshold constants
+Add shared wind threshold constants TO GIT FILES
+mightyjoey helped resolved the remaining file conflicts
 
 In Progress:
 
