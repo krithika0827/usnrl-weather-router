@@ -71,6 +71,7 @@ removed WP-1 text in favor of cleaner just numbers format
 Improves map hover over waypoint detection
 Updated test to account for changed text and removed emojis
 Added a small "AI Report"/"Generative Report" text to specify what report type is shown
+Added a wait for the forecast response
 
 In Progress:
 
