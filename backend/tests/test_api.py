@@ -28,7 +28,7 @@ def stub_weather(monkeypatch):
         return [
             WaypointForecast(
                 lat=wp.lat, lon=wp.lon, eta=wp.eta,
-                temperature_f=70.0, wind_speed_mph=8.0,
+                temperature_f=70.0, wind_speed_knots=7.0,
                 wind_direction_deg=45.0,
                 precipitation_in=0.0, humidity_pct=60,
             )
@@ -66,7 +66,7 @@ def test_summary_uses_current_table_values_without_fetching(monkeypatch):
         "lon": -76.30,
         "eta": "2026-06-08T12:00:00Z",
         "temperature_f": 1.0,
-        "wind_speed_mph": 1.0,
+        "wind_speed_knots": 1.0,
         "wind_direction_deg": 45.0,
         "precipitation_in": 1.0,
         "humidity_pct": 1,
@@ -86,7 +86,7 @@ def test_summary_uses_current_table_values_without_fetching(monkeypatch):
     assert "Borealis" in body["summary"]
     assert "Kessel Run" in body["summary"]
     assert "near 1.0 F" in body["summary"]
-    assert "light northeast winds near 1.0 mph" in body["summary"]
+    assert "light northeast winds near 1.0 knots" in body["summary"]
     assert "amounts near 1.00 in" in body["summary"]
     assert "Relative humidity is near 1%" in body["summary"]
 
