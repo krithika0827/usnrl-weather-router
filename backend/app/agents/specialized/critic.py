@@ -440,91 +440,95 @@ def validate_summary_against_route(state: ValidationState) -> dict:
             humidity_values,
         )
 
-    # Compares consecutive waypoints for sudden changes.
-    for index in range(1, len(route)):
-        previous = route[index - 1]
-        current = route[index]
+        # Compares consecutive waypoints for sudden changes.
+        for index in range(1, len(route)):
+            previous = route[index - 1]
+            current = route[index]
 
-        previous_temp = previous.get("temperature_f")
-        current_temp = current.get("temperature_f")
+            previous_waypoint = index
+            current_waypoint = index + 1
+            waypoint_range = f"waypoints[{previous_waypoint}-{current_waypoint}]"
 
-        previous_wind = previous.get("wind_speed_mph")
-        current_wind = current.get("wind_speed_mph")
+            previous_temp = previous.get("temperature_f")
+            current_temp = current.get("temperature_f")
 
-        previous_humidity = previous.get("humidity_pct")
-        current_humidity = current.get("humidity_pct")
+            previous_wind = previous.get("wind_speed_mph")
+            current_wind = current.get("wind_speed_mph")
 
-        previous_precipitation = previous.get("precipitation_in")
-        current_precipitation = current.get("precipitation_in")
+            previous_humidity = previous.get("humidity_pct")
+            current_humidity = current.get("humidity_pct")
 
-        # Flags a sudden temperature change.
-        if (
-            previous_temp is not None
-            and current_temp is not None
-            and abs(current_temp - previous_temp) >= TEMPERATURE_SPIKE_F
-        ):
-            _add_finding(
-                findings,
-                "warning",
-                f"route[{index}].temperature_f",
-                (
-                    "Temperature changes by "
-                    f"{abs(current_temp - previous_temp):.1f}°F "
-                    "from the previous waypoint."
-                ),
-            )
+            previous_precipitation = previous.get("precipitation_in")
+            current_precipitation = current.get("precipitation_in")
 
-        # Flags a sudden wind-speed change.
-        if (
-            previous_wind is not None
-            and current_wind is not None
-            and abs(current_wind - previous_wind) >= WIND_SPIKE_MPH
-        ):
-            _add_finding(
-                findings,
-                "warning",
-                f"route[{index}].wind_speed_mph",
-                (
-                    "Wind speed changes by "
-                    f"{abs(current_wind - previous_wind):.1f} mph "
-                    "from the previous waypoint."
-                ),
-            )
+            # Flags a sudden temperature change.
+            if (
+                previous_temp is not None
+                and current_temp is not None
+                and abs(current_temp - previous_temp) >= TEMPERATURE_SPIKE_F
+            ):
+                _add_finding(
+                    findings,
+                    "warning",
+                    f"{waypoint_range}.temperature_f",
+                    (
+                        "Temperature changes by "
+                        f"{abs(current_temp - previous_temp):.1f}°F "
+                        f"between waypoint {previous_waypoint} and waypoint {current_waypoint}."
+                    ),
+                )
 
-        # Flags a sudden humidity change.
-        if (
-            previous_humidity is not None
-            and current_humidity is not None
-            and abs(current_humidity - previous_humidity) >= HUMIDITY_SPIKE_PCT
-        ):
-            _add_finding(
-                findings,
-                "warning",
-                f"route[{index}].humidity_pct",
-                (
-                    "Humidity changes by "
-                    f"{abs(current_humidity - previous_humidity)} percentage points "
-                    "from the previous waypoint."
-                ),
-            )
+            # Flags a sudden wind-speed change.
+            if (
+                previous_wind is not None
+                and current_wind is not None
+                and abs(current_wind - previous_wind) >= WIND_SPIKE_MPH
+            ):
+                _add_finding(
+                    findings,
+                    "warning",
+                    f"{waypoint_range}.wind_speed_mph",
+                    (
+                        "Wind speed changes by "
+                        f"{abs(current_wind - previous_wind):.1f} mph "
+                        f"between waypoint {previous_waypoint} and waypoint {current_waypoint}."
+                    ),
+                )
 
-        # Flags a sudden precipitation change.
-        if (
-            previous_precipitation is not None
-            and current_precipitation is not None
-            and abs(current_precipitation - previous_precipitation)
-            >= PRECIPITATION_SPIKE_IN
-        ):
-            _add_finding(
-                findings,
-                "warning",
-                f"route[{index}].precipitation_in",
-                (
-                    "Precipitation changes by "
-                    f"{abs(current_precipitation - previous_precipitation):.2f} inches "
-                    "from the previous waypoint."
-                ),
-            )
+            # Flags a sudden humidity change.
+            if (
+                previous_humidity is not None
+                and current_humidity is not None
+                and abs(current_humidity - previous_humidity) >= HUMIDITY_SPIKE_PCT
+            ):
+                _add_finding(
+                    findings,
+                    "warning",
+                    f"{waypoint_range}.humidity_pct",
+                    (
+                        "Humidity changes by "
+                        f"{abs(current_humidity - previous_humidity)} percentage points "
+                        f"between waypoint {previous_waypoint} and waypoint {current_waypoint}."
+                    ),
+                )
+
+            # Flags a sudden precipitation change.
+            if (
+                previous_precipitation is not None
+                and current_precipitation is not None
+                and abs(current_precipitation - previous_precipitation)
+                >= PRECIPITATION_SPIKE_IN
+            ):
+                _add_finding(
+                    findings,
+                    "warning",
+                    f"{waypoint_range}.precipitation_in",
+                    (
+                        "Precipitation changes by "
+                        f"{abs(current_precipitation - previous_precipitation):.2f} inches "
+                        f"between waypoint {previous_waypoint} and waypoint {current_waypoint}."
+                    ),
+                )
 
     if summary and _summary_needs_regeneration(findings):
         _add_finding(
