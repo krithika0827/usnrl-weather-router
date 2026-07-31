@@ -86,7 +86,18 @@ async function openAndRunForecast(page, waypoints = waypointsTextOnePoint) {
   await page.goto("/");
 
   await page.locator("textarea").first().fill(waypoints);
+  const forecastResponsePromise = page.waitForResponse((response) => {
+    return (
+      response.url().includes("/api/v1/forecast") &&
+      response.request().method() === "POST"
+    );
+  });
+
   await page.getByRole("button", { name: /run forecast/i }).click();
+  const forecastResponse = await forecastResponsePromise;
+  await expect(page.getByRole("button", { name: /run forecast/i })).toBeEnabled();
+
+  return forecastResponse;
 }
 
 async function assertPeakValuesAndTravelDetails(page, waypointCount) {
