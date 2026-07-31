@@ -14,7 +14,6 @@ import {
 import L from "leaflet";
 
 const API_REQUEST_TIMEOUT_MS = 20000;
-const MPH_TO_KNOTS = 0.868976;
 const EDITABLE_WEATHER_FIELDS = [
     "temperature_f",
     "wind_speed_knots",
@@ -25,15 +24,6 @@ const EDITABLE_WEATHER_FIELDS = [
 
 function cloneRouteWeatherData(route) {
     return route.map((wp) => ({...wp}));
-}
-
-function convertMphToKnots(value) {
-    if (value === "" || value === null || value === undefined) return null;
-
-    const number = Number(value);
-    return Number.isFinite(number)
-        ? Math.round(number * MPH_TO_KNOTS * 10) / 10
-        : null;
 }
 
 async function fetchWithTimeout(url, options) {
@@ -172,9 +162,7 @@ function App() {
                 lat: Number(wp.lat),
                 lon: Number(wp.lon),
                 temperature_f: parseOptionalNumber(wp.temperature_f),
-                wind_speed_knots:
-                    parseOptionalNumber(wp.wind_speed_knots) ??
-                    convertMphToKnots(wp.wind_speed_mph),
+                wind_speed_knots: parseOptionalNumber(wp.wind_speed_knots),
                 wind_direction_deg: parseOptionalNumber(wp.wind_direction_deg),
                 humidity_pct: parseOptionalNumber(wp.humidity_pct),
                 precipitation_in: parseOptionalNumber(wp.precipitation_in)
@@ -277,6 +265,18 @@ function App() {
     async function regenerateWeatherSituationAndScroll() {
         scrollToRouteMap();
         await regenerateWeatherSituation();
+    }
+
+    function regenerateAiWeatherSituation() {
+        const aiReportWipText = "AI Report generation is still WIP.";
+        setError("");
+        setForecastText(aiReportWipText);
+        setWeatherSituationText(aiReportWipText);
+    }
+
+    function regenerateAiWeatherSituationAndScroll() {
+        scrollToRouteMap();
+        regenerateAiWeatherSituation();
     }
 
 
@@ -827,26 +827,27 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
     function renderWeatherSituationActions({
         regenerateOnClick = regenerateWeatherSituation,
+        regenerateAiOnClick = regenerateAiWeatherSituation,
         actionClassName = "",
         marginTop = "12px"
     } = {}) {
-        const renderGenitiveReportButton = () => (
+        const renderGenerativeReportButton = () => (
             <button
                 className="weather-situation-action-button"
                 onClick={regenerateOnClick}
             >
                 Regenerate<br />
-                Genitive Report
+                Generative Report
             </button>
         );
 
         const renderAiReportButton = () => (
             <button
                 className="weather-situation-action-button"
-                onClick={regenerateOnClick}
+                onClick={regenerateAiOnClick}
             >
                 Regenerate<br />
-                AI Report
+                AI Report (WIP)
             </button>
         );
 
@@ -855,7 +856,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                 className={`weather-situation-actions ${actionClassName}`.trim()}
                 style={{marginTop}}
             >
-                {renderGenitiveReportButton()}
+                {renderGenerativeReportButton()}
                 {renderAiReportButton()}
 
                 <button
@@ -1014,6 +1015,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     </div>
                     {renderWeatherSituationActions({
                         regenerateOnClick: regenerateWeatherSituationAndScroll,
+                        regenerateAiOnClick: regenerateAiWeatherSituationAndScroll,
                         actionClassName: "waypoint-table-actions",
                         marginTop: "16px"
                     })}

@@ -68,7 +68,7 @@ Full shapes and validation rules: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md)
 - **Input:** `{ "vehicle_name", "route_name", "waypoints": [ { "lat", "lon", "eta" }, ... ] }`
   — names are optional; `eta` is ISO-8601 UTC, waypoints in chronological order
   (else `422`).
-- **Output:** `{ "route": [ {lat, lon, eta, temperature_f, wind_speed_mph,
+- **Output:** `{ "route": [ {lat, lon, eta, temperature_f, wind_speed_knots,
   precipitation_in, humidity_pct} ], "summary": "Route guidance covers ...",
   "validation": [ {"severity", "field", "message"} ] }`.
 - **Summary refresh:** `POST /api/v1/summary` accepts `{ "vehicle_name",

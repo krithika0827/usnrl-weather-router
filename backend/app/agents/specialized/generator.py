@@ -13,8 +13,10 @@ import math
 from datetime import datetime
 from typing import Any
 
-HIGH_WIND_THRESHOLD_KNOTS = 30
-BREEZY_WIND_THRESHOLD_KNOTS = 17
+from app.agents.specialized.wind_thresholds import (
+    BREEZY_WIND_THRESHOLD_KNOTS,
+    HIGH_WIND_THRESHOLD_KNOTS,
+)
 
 
 def generate_weather_summary(

@@ -3,16 +3,21 @@
 import re
 from typing import Any, List
 
+from app.agents.specialized.wind_thresholds import (
+    HIGH_WIND_THRESHOLD_KNOTS,
+    STRONG_WIND_THRESHOLD_KNOTS,
+)
 from app.agents.state import ValidationFinding, ValidationState
 
 
 # Initial thresholds for detecting sudden changes between waypoints.
 TEMPERATURE_SPIKE_F = 30
+# This spike threshold is intentionally separate from HIGH_WIND_THRESHOLD_KNOTS
+# even though both are currently 30 knots; one flags abrupt waypoint-to-waypoint
+# changes, while the other classifies sustained wind severity in the summary.
 WIND_SPIKE_KNOTS = 30
 HUMIDITY_SPIKE_PCT = 40
 PRECIPITATION_SPIKE_IN = 1.0
-STRONG_WIND_THRESHOLD_KNOTS = 17
-HIGH_WIND_THRESHOLD_KNOTS = 30
 UNUSUAL_WIND_THRESHOLD_KNOTS = 87
 
 # Allows small formatting differences between route data and summary text.
@@ -391,7 +396,10 @@ def validate_summary_against_route(state: ValidationState) -> dict:
                 findings,
                 "warning",
                 "summary",
-                "Summary describes strong winds, but route wind speeds remain below 17 knots.",
+                (
+                    "Summary describes strong winds, but route wind speeds "
+                    f"remain below {STRONG_WIND_THRESHOLD_KNOTS} knots."
+                ),
             )
 
         # Flags calm-wind language when wind values are high.

@@ -9,7 +9,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import BaseModel, Field
 
 
 class WaypointForecast(BaseModel):
@@ -21,10 +21,7 @@ class WaypointForecast(BaseModel):
     eta: datetime
 
     temperature_f: Optional[float] = None
-    wind_speed_knots: Optional[float] = Field(
-        default=None,
-        validation_alias=AliasChoices("wind_speed_knots", "wind_speed_mph"),
-    )
+    wind_speed_knots: Optional[float] = None
     wind_direction_deg: Optional[float] = None
     precipitation_in: Optional[float] = None
     humidity_pct: Optional[int] = None

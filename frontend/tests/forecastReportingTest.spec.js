@@ -352,7 +352,7 @@ test("Edit data test @headed", async ({ page }) => {
   ]);
 
   await page
-    .getByRole("button", { name: /regenerate\s*genitive report/i })
+    .getByRole("button", { name: /regenerate\s*generative report/i })
     .first()
     .click();
 
