@@ -14,6 +14,17 @@ import {
 import L from "leaflet";
 
 const API_REQUEST_TIMEOUT_MS = 20000;
+const EDITABLE_WEATHER_FIELDS = [
+    "temperature_f",
+    "wind_speed_knots",
+    "wind_direction_deg",
+    "humidity_pct",
+    "precipitation_in"
+];
+
+function cloneRouteWeatherData(route) {
+    return route.map((wp) => ({...wp}));
+}
 
 async function fetchWithTimeout(url, options) {
     const controller = new AbortController();
@@ -151,7 +162,7 @@ function App() {
                 lat: Number(wp.lat),
                 lon: Number(wp.lon),
                 temperature_f: parseOptionalNumber(wp.temperature_f),
-                wind_speed_mph: parseOptionalNumber(wp.wind_speed_mph),
+                wind_speed_knots: parseOptionalNumber(wp.wind_speed_knots),
                 wind_direction_deg: parseOptionalNumber(wp.wind_direction_deg),
                 humidity_pct: parseOptionalNumber(wp.humidity_pct),
                 precipitation_in: parseOptionalNumber(wp.precipitation_in)
@@ -167,7 +178,8 @@ function App() {
             setRouteName(weatherContext.routeName ?? "");
             setSummaryMode(weatherContext.summaryMode ?? "deterministic");
             setWaypointsText(JSON.stringify(importedWaypoints, null, 2));
-            setWeatherData(importedRoute);
+            setWeatherData(cloneRouteWeatherData(importedRoute));
+            setOriginalWeatherData(cloneRouteWeatherData(importedRoute));
             setForecastText(importedForecastText);
             setWeatherSituationText(importedForecastText);
             setValidationFindings(weatherContext.validation ?? []);
@@ -191,7 +203,7 @@ function App() {
             peakValues: {
                 temperature_f: {min: minTemp, max: maxTemp
                 },
-                wind_speed_mph: {min: minWind, max: maxWind
+                wind_speed_knots: {min: minWind, max: maxWind
                 },
                 wind_direction_deg: {min: minWindDirection, max: maxWindDirection
                 },
@@ -207,7 +219,7 @@ function App() {
                 lat: wp.lat,
                 lon: wp.lon,
                 temperature_f: wp.temperature_f,
-                wind_speed_mph: wp.wind_speed_mph,
+                wind_speed_knots: wp.wind_speed_knots,
                 wind_direction_deg: wp.wind_direction_deg,
                 humidity_pct: wp.humidity_pct,
                 precipitation_in: wp.precipitation_in
@@ -263,6 +275,18 @@ function App() {
         await regenerateWeatherSituation();
     }
 
+    function regenerateAiWeatherSituation() {
+        const aiReportWipText = "AI Report generation is still WIP.";
+        setError("");
+        setForecastText(aiReportWipText);
+        setWeatherSituationText(aiReportWipText);
+    }
+
+    function regenerateAiWeatherSituationAndScroll() {
+        scrollToRouteMap();
+        regenerateAiWeatherSituation();
+    }
+
 
 // Placeholder weather report
 const placeHolderText = `Example of the "Weather Situation"
@@ -281,6 +305,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 ]`;
     const [waypointsText, setWaypointsText] = useState(sampleWaypoints);
     const [weatherData, setWeatherData] = useState([]);
+    const [originalWeatherData, setOriginalWeatherData] = useState([]);
     const [forecastText, setForecastText] = useState(placeHolderText);
     const [weatherSituationText, setWeatherSituationText] = useState(placeHolderText);
     const [error, setError] = useState("");
@@ -295,7 +320,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     const weatherSituationTextAreaRef = useRef(null);
 
     const {min: minTemp, max: maxTemp} = getMinMax("temperature_f");
-    const {min: minWind, max: maxWind} = getMinMax("wind_speed_mph");
+    const {min: minWind, max: maxWind} = getMinMax("wind_speed_knots");
     const {min: minWindDirection, max: maxWindDirection} = getMinMax("wind_direction_deg");
     const {min: minHumidity, max: maxHumidity} = getMinMax("humidity_pct");
     const {min: minPrecip, max: maxPrecip} = getMinMax("precipitation_in");
@@ -336,6 +361,27 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     }
                     : wp
             )
+        );
+    }
+
+    function resetWaypointWeather(index) {
+        const originalWaypoint = originalWeatherData[index];
+        if (!originalWaypoint) return;
+
+        setWeatherData((prev) =>
+            prev.map((wp, i) => {
+                if (i !== index) return wp;
+
+                const resetValues = {};
+                for (const field of EDITABLE_WEATHER_FIELDS) {
+                    resetValues[field] = originalWaypoint[field] ?? null;
+                }
+
+                return {
+                    ...wp,
+                    ...resetValues
+                };
+            })
         );
     }
 
@@ -402,10 +448,13 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             if (!response.ok) {
                 setError(formatForecastError(data));
                 setWeatherData([]);
+                setOriginalWeatherData([]);
                 setValidationFindings([]);
                 return;
             }
-            setWeatherData(data.route);
+            const routeWeatherData = cloneRouteWeatherData(data.route ?? []);
+            setWeatherData(routeWeatherData);
+            setOriginalWeatherData(cloneRouteWeatherData(routeWeatherData));
             setValidationFindings(data.validation ?? []);
             setSummaryStatus(
                 `Forecast generated using ${data.summary_mode === "gemini" ? "Gemini" : "the deterministic generator"}.`
@@ -417,6 +466,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         } catch (err) {
             setError(err.message);
             setWeatherData([]);
+            setOriginalWeatherData([]);
             setValidationFindings([]);
         } finally {
             setLoading(false);
@@ -536,22 +586,22 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         );
     }
 
-    function getWindBarbKnots(value) {
+    function getRoundedWindBarbKnots(value) {
         if (isAbsentWindSpeedForMap(value)) {
             return 0;
         }
 
-        const speedMph = Number(value);
-        if (!Number.isFinite(speedMph) || speedMph <= 0) {
+        const speedKnots = Number(value);
+        if (!Number.isFinite(speedKnots) || speedKnots <= 0) {
             return 0;
         }
 
-        const roundedKnots = Math.round((speedMph * 0.868976) / 5) * 5;
+        const roundedKnots = Math.round(speedKnots / 5) * 5;
         return Math.max(5, roundedKnots);
     }
 
     function getWindBarbSegments(value) {
-        const knots = getWindBarbKnots(value);
+        const knots = getRoundedWindBarbKnots(value);
         let remaining = knots;
 
         const pennants = Math.floor(remaining / 50);
@@ -641,6 +691,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             );
 
             let currentY = layout.staffTopY + 2;
+            const featherSpacing = 6;
 
             for (let index = 0; index < segments.pennants; index++) {
                 markup.push(
@@ -649,16 +700,20 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                 currentY += 8;
             }
 
+            if (segments.pennants > 0 && (segments.fullBarbs > 0 || segments.halfBarbs > 0)) {
+                currentY += featherSpacing;
+            }
+
             for (let index = 0; index < segments.fullBarbs; index++) {
                 markup.push(
-                    `<line class="wind-map-waypoint-barb-feather" x1="${layout.staffX}" y1="${currentY}" x2="${layout.outerX}" y2="${currentY + 5}" />`
+                    `<line class="wind-map-waypoint-barb-feather" x1="${layout.staffX}" y1="${currentY}" x2="${layout.outerX}" y2="${currentY - 5}" />`
                 );
-                currentY += 6;
+                currentY += featherSpacing;
             }
 
             if (segments.halfBarbs > 0) {
                 markup.push(
-                    `<line class="wind-map-waypoint-barb-feather" x1="${layout.staffX}" y1="${currentY}" x2="${layout.staffX + 11}" y2="${currentY + 4}" />`
+                    `<line class="wind-map-waypoint-barb-feather" x1="${layout.staffX}" y1="${currentY}" x2="${layout.staffX + 11}" y2="${currentY - 4}" />`
                 );
             }
         }
@@ -731,7 +786,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         if (markerState === "barb") {
             title = isAbsentWindSpeedForMap(windSpeed)
                 ? `Waypoint ${waypointNumber}: wind direction ${windDirection.label}, speed unavailable`
-                : `Waypoint ${waypointNumber}: wind ${windSpeed} mph from ${windDirection.label}`;
+                : `Waypoint ${waypointNumber}: wind ${windSpeed} knots from ${windDirection.label}`;
         } else if (markerState === "direction-warning") {
             title = `Waypoint ${waypointNumber}: wind direction unavailable`;
         } else if (markerState === "circle-only") {
@@ -787,9 +842,30 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
     function renderWeatherSituationActions({
         regenerateOnClick = regenerateWeatherSituation,
+        regenerateAiOnClick = regenerateAiWeatherSituation,
         actionClassName = "",
         marginTop = "12px"
     } = {}) {
+        const renderGenerativeReportButton = () => (
+            <button
+                className="weather-situation-action-button"
+                onClick={regenerateOnClick}
+            >
+                Regenerate<br />
+                Generative Report
+            </button>
+        );
+
+        const renderAiReportButton = () => (
+            <button
+                className="weather-situation-action-button"
+                onClick={regenerateAiOnClick}
+            >
+                Regenerate<br />
+                AI Report (WIP)
+            </button>
+        );
+
         return (
             <div
                 className={`weather-situation-actions ${actionClassName}`.trim()}
@@ -832,7 +908,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                             <th>↕ Lat</th>
                             <th className="longitude-heading">↔ Lon</th>
                             <th>🌡 Temp °F</th>
-                            <th>💨 Wind MPH</th>
+                            <th>💨 Wind Knots</th>
                             <th>↗ Wind Dir °</th>
                             <th>💧 Humidity %</th>
                             <th>🌧 Precipitation</th>
@@ -845,10 +921,24 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                 wp.wind_direction_deg
                             );
                             const showWindDirectionArrow = windDirection.isAvailable && !showWindDirectionReadoutAsNA;
+                            const canResetWaypoint = Boolean(originalWeatherData[index]);
 
                             return (
                                 <tr key={index}>
-                                    <td>WP-{index + 1}</td>
+                                    <td>
+                                        <div className="waypoint-name-cell">
+                                            <span>WP-{index + 1}</span>
+                                            <button
+                                                type="button"
+                                                className="waypoint-reset-button"
+                                                onClick={() => resetWaypointWeather(index)}
+                                                disabled={!canResetWaypoint}
+                                                aria-label={`Reset waypoint ${index + 1} weather values`}
+                                            >
+                                                Reset
+                                            </button>
+                                        </div>
+                                    </td>
                                     <td>{wp.eta}</td>
                                     <td>{wp.lat}</td>
                                     <td>{wp.lon}</td>
@@ -864,9 +954,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                     <td>
                                         <input
                                             type="number"
-                                            value={wp.wind_speed_mph ?? ""}
+                                            value={wp.wind_speed_knots ?? ""}
                                             onChange={(e) =>
-                                                updateWeatherCell(index, "wind_speed_mph", e.target.value)
+                                                updateWeatherCell(index, "wind_speed_knots", e.target.value)
                                             }
                                         />
                                     </td>
@@ -945,6 +1035,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     </div>
                     {renderWeatherSituationActions({
                         regenerateOnClick: regenerateWeatherSituationAndScroll,
+                        regenerateAiOnClick: regenerateAiWeatherSituationAndScroll,
                         actionClassName: "waypoint-table-actions",
                         marginTop: "16px"
                     })}
@@ -1131,7 +1222,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                     icon={createWaypointWindMarkerIcon(
                                         index + 1,
                                         getWindDirectionDisplay(wp.wind_direction_deg),
-                                        wp.wind_speed_mph,
+                                        wp.wind_speed_knots,
                                         wp.wind_direction_deg
                                     )}
                                 >
@@ -1142,7 +1233,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                         <br/>
                                         Temp: {wp.temperature_f ?? "N/A"} °F
                                         <br/>
-                                        Wind: {wp.wind_speed_mph ?? "N/A"} mph
+                                        Wind: {wp.wind_speed_knots ?? "N/A"} knots
                                         <br/>
                                         Wind Dir: {formatWindDirection(wp.wind_direction_deg)}
                                         <br/>
@@ -1176,7 +1267,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                     <div className="peak-value">
                                         {formatRange(minWind, maxWind)}
                                     </div>
-                                    <div className="peak-sub">Min / Max mph</div>
+                                    <div className="peak-sub">Min / Max knots</div>
                                 </div>
                                 <div className="peak-cell">
                                     <div className="peak-label">💧 Humidity</div>

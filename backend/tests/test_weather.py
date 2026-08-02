@@ -7,6 +7,7 @@ NOAA fallback when Open-Meteo fails, full degradation to null, and order/units.
 """
 
 import asyncio
+from datetime import datetime, timezone
 
 import httpx
 import respx
@@ -15,7 +16,11 @@ from app.core.config import settings
 from app.models.waypoint import Waypoint
 from app.services import open_meteo
 
-WP = Waypoint(lat=36.85, lon=-76.30, eta="2026-06-08T12:00:00Z")
+WP = Waypoint(
+    lat=36.85,
+    lon=-76.30,
+    eta=datetime(2026, 6, 8, 12, 0, tzinfo=timezone.utc),
+)
 
 _OPEN_METEO_OK = {
     "hourly": {
@@ -42,11 +47,11 @@ def _run(waypoints):
 
 @respx.mock
 def test_open_meteo_maps_eta_hour_in_us_units():
-    """Open-Meteo data is mapped at the ETA hour, in US units."""
+    """Open-Meteo data is mapped at the ETA hour, with wind returned in knots."""
     respx.get(settings.open_meteo_url).mock(return_value=httpx.Response(200, json=_OPEN_METEO_OK))
     [wx] = _run([WP])
     assert wx.temperature_f == 70.9   # the 12:00 ETA hour, not 11:00 / 13:00
-    assert wx.wind_speed_mph == 13.0
+    assert wx.wind_speed_knots == 13.0
     assert wx.wind_direction_deg == 45.0
     assert wx.precipitation_in == 0.0
     assert wx.humidity_pct == 67
@@ -62,7 +67,7 @@ def test_falls_back_to_noaa_when_open_meteo_fails():
         return_value=httpx.Response(200, json=_NOAA_HOURLY))
     [wx] = _run([WP])
     assert wx.temperature_f == 72.0
-    assert wx.wind_speed_mph == 10.0
+    assert wx.wind_speed_knots == 8.7
     assert wx.wind_direction_deg == 45
     assert wx.humidity_pct == 55
     assert wx.precipitation_in is None
@@ -74,7 +79,7 @@ def test_both_upstreams_down_degrades_to_null():
     respx.get(settings.open_meteo_url).mock(side_effect=httpx.ConnectError("down"))
     respx.get(url__regex=r"https://api\.weather\.gov/.*").mock(side_effect=httpx.ConnectError("down"))
     [wx] = _run([WP])
-    assert wx.temperature_f is None and wx.wind_speed_mph is None
+    assert wx.temperature_f is None and wx.wind_speed_knots is None
     assert wx.wind_direction_deg is None and wx.humidity_pct is None
     assert wx.precipitation_in is None
     assert wx.lat == WP.lat and wx.eta == WP.eta   # waypoint identity preserved
@@ -84,7 +89,14 @@ def test_both_upstreams_down_degrades_to_null():
 def test_multiple_waypoints_preserve_input_order():
     """Concurrent fetches return results in the same order as the input."""
     respx.get(settings.open_meteo_url).mock(return_value=httpx.Response(200, json=_OPEN_METEO_OK))
-    wps = [WP, Waypoint(lat=32.78, lon=-79.93, eta="2026-06-09T10:00:00Z")]
+    wps = [
+        WP,
+        Waypoint(
+            lat=32.78,
+            lon=-79.93,
+            eta=datetime(2026, 6, 9, 10, 0, tzinfo=timezone.utc),
+        ),
+    ]
     out = _run(wps)
     assert [w.lat for w in out] == [36.85, 32.78]
 
@@ -95,10 +107,17 @@ def test_large_route_survives_uncaught_fetch_error():
     that waypoint instead of failing the whole route (regression: an unexpected
     error used to escape asyncio.gather and 500 the entire request)."""
     respx.get(settings.open_meteo_url).mock(side_effect=RuntimeError("boom"))
-    wps = [Waypoint(lat=21.31, lon=-157.86, eta="2026-06-08T00:00:00Z") for _ in range(100)]
+    wps = [
+        Waypoint(
+            lat=21.31,
+            lon=-157.86,
+            eta=datetime(2026, 6, 8, 0, 0, tzinfo=timezone.utc),
+        )
+        for _ in range(100)
+    ]
     out = _run(wps)
     assert len(out) == 100
-    assert all(w.temperature_f is None and w.wind_speed_mph is None for w in out)
+    assert all(w.temperature_f is None and w.wind_speed_knots is None for w in out)
     assert all(w.lat == 21.31 for w in out)   # waypoint identity preserved
 
 

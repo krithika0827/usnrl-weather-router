@@ -59,13 +59,13 @@ time of arrival (ISO 8601, UTC).
       "lon": -76.30,
       "eta": "2026-06-10T14:00:00Z",
       "temperature_f": 75.4,
-      "wind_speed_mph": 11.2,
+      "wind_speed_knots": 11.2,
       "wind_direction_deg": 45.0,
       "precipitation_in": 0.0,
       "humidity_pct": 65
     }
   ],
-  "summary": "Borealis on route Kessel Run is forecast across 1 waypoint(s) from 2026-06-10 14:00 UTC near 36.85, -76.30 to 2026-06-10 14:00 UTC near 36.85, -76.30. Temperatures are expected to be mild near 75.4 F. Wind conditions indicate light northeast winds near 11.2 mph. No measurable accumulation is indicated at the route waypoints. Relative humidity is near 65%. Overall operational weather risk appears limited based on the provided metrics.",
+  "summary": "Borealis on route Kessel Run is forecast across 1 waypoint(s) from 2026-06-10 14:00 UTC near 36.85, -76.30 to 2026-06-10 14:00 UTC near 36.85, -76.30. Temperatures are expected to be mild near 75.4 F. Wind conditions indicate light northeast winds near 11.2 knots. No measurable accumulation is indicated at the route waypoints. Relative humidity is near 65%. Overall operational weather risk appears limited based on the provided metrics.",
   "summary_mode": "deterministic",
   "validation": []
 }
@@ -77,7 +77,7 @@ time of arrival (ISO 8601, UTC).
 |-------|------|-----------|-------|
 | `route[].lat/lon/eta` | echo of input | Joseph | identifies the waypoint |
 | `route[].temperature_f` | number \| null | Joseph | Fahrenheit (°F) |
-| `route[].wind_speed_mph` | number \| null | Joseph | miles per hour |
+| `route[].wind_speed_knots` | number \| null | Joseph | knots |
 | `route[].wind_direction_deg` | number \| null | Joseph | wind direction in degrees |
 | `route[].precipitation_in` | number \| null | Joseph | inches |
 | `route[].humidity_pct` | integer \| null | Joseph | relative humidity % |
@@ -110,7 +110,7 @@ preserved.
       "lon": -76.30,
       "eta": "2026-06-10T14:00:00Z",
       "temperature_f": 75.4,
-      "wind_speed_mph": 11.2,
+      "wind_speed_knots": 11.2,
       "wind_direction_deg": 45.0,
       "precipitation_in": 0.0,
       "humidity_pct": 65

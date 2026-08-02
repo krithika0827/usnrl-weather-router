@@ -21,6 +21,7 @@ from app.models.waypoint import Waypoint
 from app.models.weather_data import WaypointForecast
 
 _HEADERS = {"User-Agent": settings.noaa_user_agent, "Accept": "application/geo+json"}
+_MPH_TO_KNOTS = 0.868976
 
 
 async def fetch_fallback(client: httpx.AsyncClient, wp: Waypoint) -> WaypointForecast:
@@ -51,7 +52,7 @@ def _from_periods(wp: Waypoint, periods: list[dict]) -> WaypointForecast:
         lon=wp.lon,
         eta=wp.eta,
         temperature_f=_temp_f(period),
-        wind_speed_mph=_mph(period.get("windSpeed")),
+        wind_speed_knots=_mph_text_to_knots(period.get("windSpeed")),
         wind_direction_deg=_direction_deg(period.get("windDirection")),
         precipitation_in=None,  # NOAA hourly gives probability %, not an inch amount.
         humidity_pct=(period.get("relativeHumidity") or {}).get("value"),
@@ -64,10 +65,13 @@ def _temp_f(period: dict) -> float | None:
     return float(temp) if temp is not None and period.get("temperatureUnit") == "F" else None
 
 
-def _mph(wind_speed: str | None) -> float | None:
-    """Parse NOAA's textual wind speed (e.g. '10 mph') into a number."""
-    match = re.search(r"\d+", wind_speed or "")
-    return float(match.group()) if match else None
+def _mph_text_to_knots(wind_speed: str | None) -> float | None:
+    """Parse NOAA's textual mph wind speed and convert it to knots."""
+    match = re.search(r"\d+(?:\.\d+)?", wind_speed or "")
+    if not match:
+        return None
+
+    return round(float(match.group()) * _MPH_TO_KNOTS, 1)
 
 
 def _direction_deg(direction: str | None) -> float | None:

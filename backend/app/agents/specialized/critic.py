@@ -3,14 +3,22 @@
 import re
 from typing import Any, List
 
+from app.agents.specialized.wind_thresholds import (
+    HIGH_WIND_THRESHOLD_KNOTS,
+    STRONG_WIND_THRESHOLD_KNOTS,
+)
 from app.agents.state import ValidationFinding, ValidationState
 
 
 # Initial thresholds for detecting sudden changes between waypoints.
 TEMPERATURE_SPIKE_F = 30
-WIND_SPIKE_MPH = 35
+# This spike threshold is intentionally separate from HIGH_WIND_THRESHOLD_KNOTS
+# even though both are currently 30 knots; one flags abrupt waypoint-to-waypoint
+# changes, while the other classifies sustained wind severity in the summary.
+WIND_SPIKE_KNOTS = 30
 HUMIDITY_SPIKE_PCT = 40
 PRECIPITATION_SPIKE_IN = 1.0
+UNUSUAL_WIND_THRESHOLD_KNOTS = 87
 
 # Allows small formatting differences between route data and summary text.
 NUMBER_TOLERANCE = 0.05
@@ -76,7 +84,7 @@ def _check_summary_weather_numbers(
     # Checks weather numbers in the summary against raw route data.
     unit_values = {
         "f": temperatures,
-        "mph": winds,
+        "knots": winds,
         "in": precipitation_values,
         "%": humidity_values,
     }
@@ -84,7 +92,7 @@ def _check_summary_weather_numbers(
     unit_boundary = r"(?=\s|[.,;:]|$)"
 
     range_pattern = re.compile(
-        r"(-?\d+(?:\.\d+)?)\s*(?:to|-)\s*(-?\d+(?:\.\d+)?)\s*(f|mph|in|%)"
+        r"(-?\d+(?:\.\d+)?)\s*(?:to|-)\s*(-?\d+(?:\.\d+)?)\s*(f|knots|in|%)"
         + unit_boundary,
         re.IGNORECASE,
     )
@@ -102,7 +110,7 @@ def _check_summary_weather_numbers(
                 _add_summary_number_warning(findings, value, unit)
 
     single_pattern = re.compile(
-        r"(-?\d+(?:\.\d+)?)\s*(f|mph|in|%)" + unit_boundary,
+        r"(-?\d+(?:\.\d+)?)\s*(f|knots|in|%)" + unit_boundary,
         re.IGNORECASE,
     )
 
@@ -164,7 +172,7 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         "lon",
         "eta",
         "temperature_f",
-        "wind_speed_mph",
+        "wind_speed_knots",
         "precipitation_in",
         "humidity_pct",
     ]
@@ -194,7 +202,7 @@ def validate_summary_against_route(state: ValidationState) -> dict:
             # Weather API failures may produce null metrics.
             if field in {
                 "temperature_f",
-                "wind_speed_mph",
+                "wind_speed_knots",
                 "precipitation_in",
                 "humidity_pct",
             } and point[field] is None:
@@ -208,7 +216,7 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         lat = point.get("lat")
         lon = point.get("lon")
         temp = point.get("temperature_f")
-        wind = point.get("wind_speed_mph")
+        wind = point.get("wind_speed_knots")
         wind_direction = point.get("wind_direction_deg")
         precipitation = point.get("precipitation_in")
         humidity = point.get("humidity_pct")
@@ -244,14 +252,14 @@ def validate_summary_against_route(state: ValidationState) -> dict:
             _add_finding(
                 findings,
                 "error",
-                f"route[{index}].wind_speed_mph",
+                f"route[{index}].wind_speed_knots",
                 "Wind speed cannot be negative.",
             )
-        elif wind is not None and wind > 100:
+        elif wind is not None and wind > UNUSUAL_WIND_THRESHOLD_KNOTS:
             _add_finding(
                 findings,
                 "warning",
-                f"route[{index}].wind_speed_mph",
+                f"route[{index}].wind_speed_knots",
                 "Wind speed is unusually high and should be reviewed.",
             )
 
@@ -289,9 +297,9 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         if point.get("temperature_f") is not None
     ]
     winds = [
-        point["wind_speed_mph"]
+        point["wind_speed_knots"]
         for point in route
-        if point.get("wind_speed_mph") is not None
+        if point.get("wind_speed_knots") is not None
     ]
     precipitation_values = [
         point["precipitation_in"]
@@ -381,20 +389,23 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         # Flags strong-wind language when wind values are low.
         if (
             maximum_wind is not None
-            and maximum_wind < 20
+            and maximum_wind < STRONG_WIND_THRESHOLD_KNOTS
             and any(word in summary_lower for word in strong_wind_words)
         ):
             _add_finding(
                 findings,
                 "warning",
                 "summary",
-                "Summary describes strong winds, but route wind speeds remain below 20 mph.",
+                (
+                    "Summary describes strong winds, but route wind speeds "
+                    f"remain below {STRONG_WIND_THRESHOLD_KNOTS} knots."
+                ),
             )
 
         # Flags calm-wind language when wind values are high.
         if (
             maximum_wind is not None
-            and maximum_wind >= 35
+            and maximum_wind >= HIGH_WIND_THRESHOLD_KNOTS
             and any(word in summary_lower for word in calm_wind_words)
         ):
             _add_finding(
@@ -440,91 +451,95 @@ def validate_summary_against_route(state: ValidationState) -> dict:
             humidity_values,
         )
 
-    # Compares consecutive waypoints for sudden changes.
-    for index in range(1, len(route)):
-        previous = route[index - 1]
-        current = route[index]
+        # Compares consecutive waypoints for sudden changes.
+        for index in range(1, len(route)):
+            previous = route[index - 1]
+            current = route[index]
 
-        previous_temp = previous.get("temperature_f")
-        current_temp = current.get("temperature_f")
+            previous_waypoint = index
+            current_waypoint = index + 1
+            waypoint_range = f"waypoints[{previous_waypoint}-{current_waypoint}]"
 
-        previous_wind = previous.get("wind_speed_mph")
-        current_wind = current.get("wind_speed_mph")
+            previous_temp = previous.get("temperature_f")
+            current_temp = current.get("temperature_f")
 
-        previous_humidity = previous.get("humidity_pct")
-        current_humidity = current.get("humidity_pct")
+            previous_wind = previous.get("wind_speed_knots")
+            current_wind = current.get("wind_speed_knots")
 
-        previous_precipitation = previous.get("precipitation_in")
-        current_precipitation = current.get("precipitation_in")
+            previous_humidity = previous.get("humidity_pct")
+            current_humidity = current.get("humidity_pct")
 
-        # Flags a sudden temperature change.
-        if (
-            previous_temp is not None
-            and current_temp is not None
-            and abs(current_temp - previous_temp) >= TEMPERATURE_SPIKE_F
-        ):
-            _add_finding(
-                findings,
-                "warning",
-                f"route[{index}].temperature_f",
-                (
-                    "Temperature changes by "
-                    f"{abs(current_temp - previous_temp):.1f}°F "
-                    "from the previous waypoint."
-                ),
-            )
+            previous_precipitation = previous.get("precipitation_in")
+            current_precipitation = current.get("precipitation_in")
 
-        # Flags a sudden wind-speed change.
-        if (
-            previous_wind is not None
-            and current_wind is not None
-            and abs(current_wind - previous_wind) >= WIND_SPIKE_MPH
-        ):
-            _add_finding(
-                findings,
-                "warning",
-                f"route[{index}].wind_speed_mph",
-                (
-                    "Wind speed changes by "
-                    f"{abs(current_wind - previous_wind):.1f} mph "
-                    "from the previous waypoint."
-                ),
-            )
+            # Flags a sudden temperature change.
+            if (
+                previous_temp is not None
+                and current_temp is not None
+                and abs(current_temp - previous_temp) >= TEMPERATURE_SPIKE_F
+            ):
+                _add_finding(
+                    findings,
+                    "warning",
+                    f"{waypoint_range}.temperature_f",
+                    (
+                        "Temperature changes by "
+                        f"{abs(current_temp - previous_temp):.1f}°F "
+                        f"between waypoint {previous_waypoint} and waypoint {current_waypoint}."
+                    ),
+                )
 
-        # Flags a sudden humidity change.
-        if (
-            previous_humidity is not None
-            and current_humidity is not None
-            and abs(current_humidity - previous_humidity) >= HUMIDITY_SPIKE_PCT
-        ):
-            _add_finding(
-                findings,
-                "warning",
-                f"route[{index}].humidity_pct",
-                (
-                    "Humidity changes by "
-                    f"{abs(current_humidity - previous_humidity)} percentage points "
-                    "from the previous waypoint."
-                ),
-            )
+            # Flags a sudden wind-speed change.
+            if (
+                previous_wind is not None
+                and current_wind is not None
+                and abs(current_wind - previous_wind) >= WIND_SPIKE_KNOTS
+            ):
+                _add_finding(
+                    findings,
+                    "warning",
+                    f"{waypoint_range}.wind_speed_knots",
+                    (
+                        "Wind speed changes by "
+                        f"{abs(current_wind - previous_wind):.1f} knots "
+                        f"between waypoint {previous_waypoint} and waypoint {current_waypoint}."
+                    ),
+                )
 
-        # Flags a sudden precipitation change.
-        if (
-            previous_precipitation is not None
-            and current_precipitation is not None
-            and abs(current_precipitation - previous_precipitation)
-            >= PRECIPITATION_SPIKE_IN
-        ):
-            _add_finding(
-                findings,
-                "warning",
-                f"route[{index}].precipitation_in",
-                (
-                    "Precipitation changes by "
-                    f"{abs(current_precipitation - previous_precipitation):.2f} inches "
-                    "from the previous waypoint."
-                ),
-            )
+            # Flags a sudden humidity change.
+            if (
+                previous_humidity is not None
+                and current_humidity is not None
+                and abs(current_humidity - previous_humidity) >= HUMIDITY_SPIKE_PCT
+            ):
+                _add_finding(
+                    findings,
+                    "warning",
+                    f"{waypoint_range}.humidity_pct",
+                    (
+                        "Humidity changes by "
+                        f"{abs(current_humidity - previous_humidity)} percentage points "
+                        f"between waypoint {previous_waypoint} and waypoint {current_waypoint}."
+                    ),
+                )
+
+            # Flags a sudden precipitation change.
+            if (
+                previous_precipitation is not None
+                and current_precipitation is not None
+                and abs(current_precipitation - previous_precipitation)
+                >= PRECIPITATION_SPIKE_IN
+            ):
+                _add_finding(
+                    findings,
+                    "warning",
+                    f"{waypoint_range}.precipitation_in",
+                    (
+                        "Precipitation changes by "
+                        f"{abs(current_precipitation - previous_precipitation):.2f} inches "
+                        f"between waypoint {previous_waypoint} and waypoint {current_waypoint}."
+                    ),
+                )
 
     if summary and _summary_needs_regeneration(findings):
         _add_finding(

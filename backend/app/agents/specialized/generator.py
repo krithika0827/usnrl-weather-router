@@ -13,6 +13,11 @@ import math
 from datetime import datetime
 from typing import Any
 
+from app.agents.specialized.wind_thresholds import (
+    BREEZY_WIND_THRESHOLD_KNOTS,
+    HIGH_WIND_THRESHOLD_KNOTS,
+)
+
 
 def generate_weather_summary(
     route: list[Any],
@@ -45,7 +50,7 @@ def generate_weather_summary(
         )
 
     temps = _values(available_points, "temperature_f")
-    winds = _values(available_points, "wind_speed_mph")
+    winds = _values(available_points, "wind_speed_knots")
     wind_directions = _values(available_points, "wind_direction_deg")
     humidity = _values(available_points, "humidity_pct")
     precip = _values(available_points, "precipitation_in")
@@ -78,7 +83,7 @@ def generate_weather_summary(
 
 WEATHER_FIELDS = (
     "temperature_f",
-    "wind_speed_mph",
+    "wind_speed_knots",
     "precipitation_in",
     "humidity_pct",
 )
@@ -200,9 +205,9 @@ def _wind_sentence(winds: list[float], directions: list[float]) -> str:
 
     maximum = max(winds)
     direction = _prevailing_direction(directions)
-    if maximum >= 35:
+    if maximum >= HIGH_WIND_THRESHOLD_KNOTS:
         descriptor = "high winds"
-    elif maximum >= 20:
+    elif maximum >= BREEZY_WIND_THRESHOLD_KNOTS:
         descriptor = "breezy winds"
     elif direction:
         descriptor = f"light {direction} winds"
@@ -210,9 +215,9 @@ def _wind_sentence(winds: list[float], directions: list[float]) -> str:
         descriptor = "light winds"
 
     if _has_no_range(winds):
-        return f"Wind conditions indicate {descriptor} near {_format_range(winds, 'mph')}."
+        return f"Wind conditions indicate {descriptor} near {_format_range(winds, 'knots')}."
 
-    return f"Wind conditions indicate {descriptor}, with speeds from {_format_range(winds, 'mph')}."
+    return f"Wind conditions indicate {descriptor}, with speeds from {_format_range(winds, 'knots')}."
 
 
 def _prevailing_direction(directions: list[float]) -> str | None:
@@ -299,7 +304,7 @@ def _hazard_sentence(
     missing_fields: set[str],
 ) -> str:
     hazards = []
-    if winds and max(winds) >= 35:
+    if winds and max(winds) >= HIGH_WIND_THRESHOLD_KNOTS:
         hazards.append("high wind impacts")
     if precip and max(precip) >= 0.25:
         hazards.append("wet travel conditions")

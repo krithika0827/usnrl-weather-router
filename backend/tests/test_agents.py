@@ -1,6 +1,6 @@
 # LLM evaluation / hallucination audit tests — Owner: Ryan
-
 from datetime import datetime, timezone
+from typing import Optional
 
 from app.agents.graph import run_validation
 from app.agents.specialized.generator import generate_weather_summary
@@ -8,19 +8,19 @@ from app.models.weather_data import WaypointForecast
 
 
 def make_waypoint(
-    temperature_f=70,
-    wind_speed_mph=10,
-    wind_direction_deg=45,
-    precipitation_in=0,
-    humidity_pct=50,
-):
+    temperature_f: Optional[float] = 70,
+    wind_speed_knots: Optional[float] = 10,
+    wind_direction_deg: Optional[float] = 45,
+    precipitation_in: Optional[float] = 0,
+    humidity_pct: Optional[int] = 50,
+) -> WaypointForecast:
     # Creates a reusable sample waypoint.
     return WaypointForecast(
         lat=36.85,
         lon=-76.30,
         eta=datetime(2026, 6, 8, 12, 0, tzinfo=timezone.utc),
         temperature_f=temperature_f,
-        wind_speed_mph=wind_speed_mph,
+        wind_speed_knots=wind_speed_knots,
         wind_direction_deg=wind_direction_deg,
         precipitation_in=precipitation_in,
         humidity_pct=humidity_pct,
@@ -80,14 +80,29 @@ def test_negative_precipitation_returns_error():
 def test_negative_wind_speed_returns_error():
     # Checks that negative wind speed is invalid.
     findings = run_validation(
-        [make_waypoint(wind_speed_mph=-5)],
+        [make_waypoint(wind_speed_knots=-5)],
         "Light winds are expected.",
     )
 
     assert any(
         finding["severity"] == "error"
-        and finding["field"] == "route[0].wind_speed_mph"
+        and finding["field"] == "route[0].wind_speed_knots"
         and "Wind speed cannot be negative" in finding["message"]
+        for finding in findings
+    )
+
+
+def test_unusually_high_wind_speed_returns_warning():
+    # Checks that unusually high wind speeds are flagged for review.
+    findings = run_validation(
+        [make_waypoint(wind_speed_knots=90)],
+        "Strong winds are expected.",
+    )
+
+    assert any(
+        finding["severity"] == "warning"
+        and finding["field"] == "route[0].wind_speed_knots"
+        and "unusually high" in finding["message"]
         for finding in findings
     )
 
@@ -168,7 +183,7 @@ def test_temperature_spike_returns_warning():
 
     assert any(
         finding["severity"] == "warning"
-        and finding["field"] == "route[1].temperature_f"
+        and finding["field"] == "waypoints[1-2].temperature_f"
         and "Temperature changes by" in finding["message"]
         for finding in findings
     )
@@ -177,15 +192,15 @@ def test_temperature_spike_returns_warning():
 def test_wind_spike_returns_warning():
     # Checks for a large wind-speed change between waypoints.
     route = [
-        make_waypoint(wind_speed_mph=5),
-        make_waypoint(wind_speed_mph=50),
+        make_waypoint(wind_speed_knots=5),
+        make_waypoint(wind_speed_knots=40),
     ]
 
     findings = run_validation(route, "Wind conditions will change.")
 
     assert any(
         finding["severity"] == "warning"
-        and finding["field"] == "route[1].wind_speed_mph"
+        and finding["field"] == "waypoints[1-2].wind_speed_knots"
         and "Wind speed changes by" in finding["message"]
         for finding in findings
     )
@@ -206,13 +221,13 @@ def test_generator_creates_summary_from_route_data():
     route = [
         make_waypoint(
             temperature_f=68,
-            wind_speed_mph=12,
+            wind_speed_knots=10,
             precipitation_in=0,
             humidity_pct=55,
         ),
         make_waypoint(
             temperature_f=74,
-            wind_speed_mph=18,
+            wind_speed_knots=16,
             precipitation_in=0,
             humidity_pct=62,
         ),
@@ -222,7 +237,7 @@ def test_generator_creates_summary_from_route_data():
 
     assert "68.0 to 74.0 F" in summary
     assert "northeast winds" in summary
-    assert "12.0 to 18.0 mph" in summary
+    assert "10.0 to 16.0 knots" in summary
     assert "No measurable accumulation" in summary
     assert "placeholder" not in summary.lower()
     assert run_validation(route, summary) == []
@@ -240,18 +255,60 @@ def test_generator_mentions_vehicle_and_route_names():
     assert "Kessel Run" in summary
 
 
+def test_summary_number_validation_checks_knots_values():
+    # Checks that summary wind values are validated against route values in knots.
+    findings = run_validation(
+        [make_waypoint(wind_speed_knots=10)],
+        "Wind conditions indicate light northeast winds near 999 knots.",
+    )
+
+    assert any(
+        finding["field"] == "summary"
+        and "999 knots" in finding["message"]
+        for finding in findings
+    )
+
+
+def test_strong_wind_summary_with_low_knots_returns_warning():
+    # Checks strong-wind wording against low route wind values in knots.
+    findings = run_validation(
+        [make_waypoint(wind_speed_knots=10)],
+        "Strong winds are expected along the route.",
+    )
+
+    assert any(
+        finding["field"] == "summary"
+        and "below 17 knots" in finding["message"]
+        for finding in findings
+    )
+
+
+def test_light_wind_summary_with_high_knots_returns_warning():
+    # Checks calm/light wording against high route wind values in knots.
+    findings = run_validation(
+        [make_waypoint(wind_speed_knots=35)],
+        "Light winds are expected along the route.",
+    )
+
+    assert any(
+        finding["field"] == "summary"
+        and "contains high wind speeds" in finding["message"]
+        for finding in findings
+    )
+
+
 def test_generator_uses_single_value_wording_when_there_is_no_range():
     # Checks that identical values are not described as ranges.
     route = [
         make_waypoint(
             temperature_f=1,
-            wind_speed_mph=1,
+            wind_speed_knots=1,
             precipitation_in=1,
             humidity_pct=1,
         ),
         make_waypoint(
             temperature_f=1,
-            wind_speed_mph=1,
+            wind_speed_knots=1,
             precipitation_in=1,
             humidity_pct=1,
         ),
@@ -260,11 +317,11 @@ def test_generator_uses_single_value_wording_when_there_is_no_range():
     summary = generate_weather_summary(route)
 
     assert "ranging from 1.0 F" not in summary
-    assert "with speeds from 1.0 mph" not in summary
+    assert "with speeds from 1.0 knots" not in summary
     assert "amounts from 1.00 in" not in summary
     assert "Relative humidity ranges from 1%" not in summary
     assert "near 1.0 F" in summary
-    assert "light northeast winds near 1.0 mph" in summary
+    assert "light northeast winds near 1.0 knots" in summary
     assert "amounts near 1.00 in" in summary
     assert "Relative humidity is near 1%" in summary
 
@@ -274,7 +331,7 @@ def test_generator_notes_missing_weather_data():
     summary = generate_weather_summary([
         make_waypoint(
             temperature_f=None,
-            wind_speed_mph=None,
+            wind_speed_knots=None,
             wind_direction_deg=None,
             precipitation_in=None,
             humidity_pct=None,
