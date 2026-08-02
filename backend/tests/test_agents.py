@@ -63,6 +63,34 @@ def test_rain_summary_with_zero_precipitation_returns_warning():
     )
 
 
+def test_zero_precipitation_measurement_does_not_return_warning():
+    """A factual zero-precipitation statement is not a rain forecast."""
+    findings = run_validation(
+        [make_waypoint(precipitation_in=0)],
+        "Precipitation remains at 0.0 inches along the route.",
+    )
+
+    assert not any(
+        finding["field"] == "summary"
+        and "precipitation values are 0" in finding["message"]
+        for finding in findings
+    )
+
+
+def test_no_rain_statement_with_zero_precipitation_does_not_return_warning():
+    """An explicitly dry forecast should not be classified as rain."""
+    findings = run_validation(
+        [make_waypoint(precipitation_in=0)],
+        "No rain or measurable precipitation is expected along the route.",
+    )
+
+    assert not any(
+        finding["field"] == "summary"
+        and "precipitation values are 0" in finding["message"]
+        for finding in findings
+    )
+
+
 def test_negative_precipitation_returns_error():
     # Checks that negative precipitation is invalid.
     findings = run_validation(

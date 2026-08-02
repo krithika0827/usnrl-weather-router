@@ -24,6 +24,27 @@ UNUSUAL_WIND_THRESHOLD_KNOTS = 87
 NUMBER_TOLERANCE = 0.05
 
 
+def _summary_claims_wet_weather(summary: str) -> bool:
+    """Return true only when the narrative predicts wet weather.
+
+    Neutral measurements such as ``0.0 inches of precipitation`` are factual
+    restatements of route data, not a claim that rain is expected.
+    """
+    without_negated_weather = re.sub(
+        r"\b(?:no|without)\s+(?:measurable\s+)?"
+        r"(?:rain(?:fall)?|showers?|storms?|wet weather)"
+        r"(?:\s+or\s+(?:measurable\s+)?precipitation)?\b",
+        "",
+        summary,
+    )
+    wet_weather_patterns = (
+        r"\b(?:rain|raining|rainfall|showers?|storms?|stormy|wet conditions?|wet weather)\b",
+        r"\b(?:measurable\s+)?precipitation\s+(?:is\s+)?(?:expected|forecast|likely)\b",
+        r"\b(?:expected|forecast|likely)\s+(?:measurable\s+)?precipitation\b",
+    )
+    return any(re.search(pattern, without_negated_weather) for pattern in wet_weather_patterns)
+
+
 def _point_to_dict(point: Any) -> dict:
     # Converts a Pydantic waypoint into a dictionary.
     if hasattr(point, "model_dump"):
@@ -321,14 +342,6 @@ def validate_summary_against_route(state: ValidationState) -> dict:
         minimum_temperature = min(temperatures) if temperatures else None
         maximum_temperature = max(temperatures) if temperatures else None
 
-        rain_words = [
-            "rain",
-            "raining",
-            "precipitation",
-            "showers",
-            "storm",
-            "wet conditions",
-        ]
         dry_words = [
             "dry",
             "no rain",
@@ -360,11 +373,12 @@ def validate_summary_against_route(state: ValidationState) -> dict:
             "low temperatures",
         ]
 
-        # Flags rain language when the data shows no precipitation.
+        # Flags predicted wet weather when the data shows no precipitation.
+        # Merely reporting a zero precipitation measurement is valid.
         if (
             precipitation_values
             and total_precipitation == 0
-            and any(word in summary_lower for word in rain_words)
+            and _summary_claims_wet_weather(summary_lower)
         ):
             _add_finding(
                 findings,
