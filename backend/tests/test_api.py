@@ -145,7 +145,10 @@ def test_gemini_prompt_requests_route_level_summary():
 
     prompt = summary_generator._build_gemini_prompt(route, "Borealis", "Kessel Run")
 
-    assert "Do NOT enumerate every waypoint" in prompt
+    assert "naval operational weather situation" in prompt
+    assert "future-focused transit language" in prompt
+    assert "forecaster's narrative briefing" in prompt
+    assert "do NOT enumerate every waypoint" in prompt
     assert "ROUTE_OVERVIEW:" in prompt
     assert '"duration_hours":24.0' in prompt
     assert '"distance_miles":' in prompt
