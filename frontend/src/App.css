@@ -97,8 +97,7 @@ textarea:focus {
     border-color: var(--accent);
 }
 
-input,
-select {
+input {
     width: 100%;
     background: #060f1e;
     color: var(--text);
@@ -109,8 +108,7 @@ select {
     outline: none;
 }
 
-input:focus,
-select:focus {
+input:focus {
     border-color: var(--accent);
 }
 
@@ -148,6 +146,14 @@ button:disabled {
 .weather-situation-action-button {
     width: 190px;
     min-width: 190px;
+}
+
+.weather-situation-action-button.secondary {
+    background: var(--navy-lt);
+}
+
+.weather-situation-action-button.secondary:hover {
+    background: #24497f;
 }
 
 .summary-generation-status {

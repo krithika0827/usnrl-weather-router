@@ -176,7 +176,7 @@ function App() {
 
             setVehicleName(weatherContext.vehicleName ?? "");
             setRouteName(weatherContext.routeName ?? "");
-            setSummaryMode(weatherContext.summaryMode ?? "deterministic");
+            setSummaryMode(weatherContext.summaryMode ?? "gemini");
             setWaypointsText(JSON.stringify(importedWaypoints, null, 2));
             setWeatherData(cloneRouteWeatherData(importedRoute));
             setOriginalWeatherData(cloneRouteWeatherData(importedRoute));
@@ -228,7 +228,7 @@ function App() {
     }
 
     // Refresh only the Weather Situation using the current editable table values.
-    async function regenerateWeatherSituation() {
+    async function regenerateWeatherSituation(mode = summaryMode) {
         if (weatherData.length === 0) {
             setError("Run a forecast before regenerating the Weather Situation.");
             return;
@@ -236,6 +236,7 @@ function App() {
 
         setError("");
         setSummaryStatus("");
+        setSummaryMode(mode);
         setLoading(true);
         try {
             const response = await fetchWithTimeout("http://localhost:8000/api/v1/summary", {
@@ -247,7 +248,7 @@ function App() {
                     route: weatherData,
                     vehicle_name: vehicleName,
                     route_name: routeName,
-                    summary_mode: summaryMode
+                    summary_mode: mode
                 })
             });
             const data = await response.json();
@@ -270,21 +271,9 @@ function App() {
         }
     }
 
-    async function regenerateWeatherSituationAndScroll() {
+    async function regenerateWeatherSituationAndScroll(mode) {
         scrollToRouteMap();
-        await regenerateWeatherSituation();
-    }
-
-    function regenerateAiWeatherSituation() {
-        const aiReportWipText = "AI Report generation is still WIP.";
-        setError("");
-        setForecastText(aiReportWipText);
-        setWeatherSituationText(aiReportWipText);
-    }
-
-    function regenerateAiWeatherSituationAndScroll() {
-        scrollToRouteMap();
-        regenerateAiWeatherSituation();
+        await regenerateWeatherSituation(mode);
     }
 
 
@@ -313,7 +302,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     const [validationFindings, setValidationFindings] = useState([]);
     const [vehicleName, setVehicleName] = useState("Borealis");
     const [routeName, setRouteName] = useState("Kessel Run");
-    const [summaryMode, setSummaryMode] = useState("deterministic");
+    // The initial forecast uses Gemini; either explicit regeneration button can
+    // then select the desired source for the current editable table.
+    const [summaryMode, setSummaryMode] = useState("gemini");
     const [summaryStatus, setSummaryStatus] = useState("");
     const jsonUploadInputRef = useRef(null);
     const routeMapTitleRef = useRef(null);
@@ -842,30 +833,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
     function renderWeatherSituationActions({
         regenerateOnClick = regenerateWeatherSituation,
-        regenerateAiOnClick = regenerateAiWeatherSituation,
         actionClassName = "",
         marginTop = "12px"
     } = {}) {
-        const renderGenerativeReportButton = () => (
-            <button
-                className="weather-situation-action-button"
-                onClick={regenerateOnClick}
-            >
-                Regenerate<br />
-                Generative Report
-            </button>
-        );
-
-        const renderAiReportButton = () => (
-            <button
-                className="weather-situation-action-button"
-                onClick={regenerateAiOnClick}
-            >
-                Regenerate<br />
-                AI Report (WIP)
-            </button>
-        );
-
         return (
             <div
                 className={`weather-situation-actions ${actionClassName}`.trim()}
@@ -873,10 +843,18 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             >
                 <button
                     className="weather-situation-action-button"
-                    onClick={regenerateOnClick}
+                    onClick={() => regenerateOnClick("gemini")}
                     disabled={loading}
                 >
-                    {loading ? "Generating..." : <>Regenerate<br />Weather Situation</>}
+                    {loading ? "Generating..." : <>Regenerate<br />Gemini Summary</>}
+                </button>
+
+                <button
+                    className="weather-situation-action-button secondary"
+                    onClick={() => regenerateOnClick("deterministic")}
+                    disabled={loading}
+                >
+                    {loading ? "Generating..." : <>Regenerate<br />Deterministic Summary</>}
                 </button>
 
                 <button
@@ -1035,7 +1013,6 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     </div>
                     {renderWeatherSituationActions({
                         regenerateOnClick: regenerateWeatherSituationAndScroll,
-                        regenerateAiOnClick: regenerateAiWeatherSituationAndScroll,
                         actionClassName: "waypoint-table-actions",
                         marginTop: "16px"
                     })}
@@ -1109,26 +1086,6 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                                     padding: "8px"
                                 }}
                             />
-                        </div>
-                        <div>
-                            <label
-                                htmlFor="summary-mode"
-                                style={{
-                                    display: "block",
-                                    marginBottom: "6px",
-                                    fontWeight: "bold"
-                                }}
-                            >
-                                Summary Generator
-                            </label>
-                            <select
-                                id="summary-mode"
-                                value={summaryMode}
-                                onChange={(e) => setSummaryMode(e.target.value)}
-                            >
-                                <option value="deterministic">Deterministic</option>
-                                <option value="gemini">Gemini (Google AI Studio)</option>
-                            </select>
                         </div>
                         <div>
                             {/* Input Route Name */}
