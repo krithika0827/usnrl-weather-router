@@ -76,9 +76,15 @@ function RouteBoundsUpdater({points}) {
 
 function App() {
     function scrollToRouteMap() {
-        routeMapTitleRef.current?.scrollIntoView({
+        const routeMapTitle = routeMapTitleRef.current;
+        if (!routeMapTitle) return;
+
+        window.scrollTo({
+            top: Math.max(
+                0,
+                routeMapTitle.getBoundingClientRect().top + window.scrollY - 20
+            ),
             behavior: "smooth",
-            block: "start"
         });
     }
 
@@ -270,12 +276,6 @@ function App() {
             setLoading(false);
         }
     }
-
-    async function regenerateWeatherSituationAndScroll(mode) {
-        scrollToRouteMap();
-        await regenerateWeatherSituation(mode);
-    }
-
 
 // Placeholder weather report
 const placeHolderText = `Example of the "Weather Situation"
@@ -833,9 +833,17 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
     function renderWeatherSituationActions({
         regenerateOnClick = regenerateWeatherSituation,
+        scrollToMapBeforeRegeneration = false,
         actionClassName = "",
         marginTop = "12px"
     } = {}) {
+        function regenerate(mode) {
+            if (scrollToMapBeforeRegeneration) {
+                scrollToRouteMap();
+            }
+            regenerateOnClick(mode);
+        }
+
         return (
             <div
                 className={`weather-situation-actions ${actionClassName}`.trim()}
@@ -843,7 +851,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             >
                 <button
                     className="weather-situation-action-button"
-                    onClick={() => regenerateOnClick("gemini")}
+                    onClick={() => regenerate("gemini")}
                     disabled={loading}
                 >
                     {loading ? "Generating..." : <>Regenerate<br />Gemini Summary</>}
@@ -851,7 +859,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
                 <button
                     className="weather-situation-action-button secondary"
-                    onClick={() => regenerateOnClick("deterministic")}
+                    onClick={() => regenerate("deterministic")}
                     disabled={loading}
                 >
                     {loading ? "Generating..." : <>Regenerate<br />Deterministic Summary</>}
@@ -1012,7 +1020,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                         </table>
                     </div>
                     {renderWeatherSituationActions({
-                        regenerateOnClick: regenerateWeatherSituationAndScroll,
+                        scrollToMapBeforeRegeneration: true,
                         actionClassName: "waypoint-table-actions",
                         marginTop: "16px"
                     })}
