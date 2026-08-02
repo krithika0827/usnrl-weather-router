@@ -130,6 +130,29 @@ async def test_gemini_mode_uses_provider_when_configured(monkeypatch):
     assert result.warning is None
 
 
+def test_gemini_prompt_requests_route_level_summary():
+    """The Gemini prompt supplies ranges and route findings instead of a table recital."""
+    route = [
+        WaypointForecast(
+            lat=36.85, lon=-76.30, eta="2026-06-08T12:00:00Z",
+            temperature_f=70, wind_speed_knots=5, precipitation_in=0, humidity_pct=90,
+        ),
+        WaypointForecast(
+            lat=36.20, lon=-76.55, eta="2026-06-09T12:00:00Z",
+            temperature_f=80, wind_speed_knots=15, precipitation_in=0, humidity_pct=45,
+        ),
+    ]
+
+    prompt = summary_generator._build_gemini_prompt(route, "Borealis", "Kessel Run")
+
+    assert "Do NOT enumerate every waypoint" in prompt
+    assert "ROUTE_OVERVIEW:" in prompt
+    assert '"duration_hours":24.0' in prompt
+    assert '"distance_miles":' in prompt
+    assert "ROUTE_FINDINGS:" in prompt
+    assert "Humidity changes by 45 percentage points" in prompt
+
+
 def test_rejects_latitude_out_of_range():
     """Latitude outside [-90, 90] is rejected with 422."""
     bad = {"waypoints": [{"lat": 200, "lon": 0, "eta": "2026-06-08T12:00:00Z"}]}
