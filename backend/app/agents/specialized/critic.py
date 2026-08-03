@@ -32,8 +32,10 @@ def _summary_claims_wet_weather(summary: str) -> bool:
     """
     without_negated_weather = re.sub(
         r"\b(?:no|without)\s+(?:measurable\s+)?"
-        r"(?:rain(?:fall)?|showers?|storms?|wet weather)"
-        r"(?:\s+or\s+(?:measurable\s+)?precipitation)?\b",
+        r"(?:rain(?:fall)?|showers?|storms?|wet weather|precipitation)"
+        r"(?:\s+or\s+(?:measurable\s+)?"
+        r"(?:rain(?:fall)?|showers?|storms?|wet weather|precipitation))?"
+        r"(?:\s+(?:is|are))?(?:\s+(?:expected|forecast|likely))?\b",
         "",
         summary,
     )
