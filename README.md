@@ -19,7 +19,7 @@ endpoint.
 | Open-Meteo fetch (US units, async, ETA-matched) | ✅ working | Joseph |
 | NOAA fallback + graceful degradation | ✅ working | Joseph |
 | Backend tests + CI | ✅ working | Joseph |
-| `summary` (AI forecast discussion) | ✅ generated | Krithika |
+| `summary` (deterministic or Gemini forecast discussion) | ✅ generated | Krithika |
 | `validation` (review-agent findings) | ✅ integrated | Ryan |
 | Frontend map | ✅ working | Reece |
 | Frontend table | ✅ working | Reece |
@@ -72,8 +72,11 @@ Full shapes and validation rules: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md)
   precipitation_in, humidity_pct} ], "summary": "Route guidance covers ...",
   "validation": [ {"severity", "field", "message"} ] }`.
 - **Summary refresh:** `POST /api/v1/summary` accepts `{ "vehicle_name",
-  "route_name", "route": [...] }` from the editable weather table and
+  "route_name", "summary_mode", "route": [...] }` from the editable weather table and
   regenerates only `summary`/`validation` without fetching new forecast values.
+  `summary_mode` is `deterministic` (default) or `gemini`. Gemini uses a
+  server-side `GEMINI_API_KEY` from `.env` and falls back to deterministic text
+  with a validation warning if the key or provider is unavailable.
 
 The response shape is stable, so frontend and validation work can rely on the
 same envelope even as the summary generator improves.

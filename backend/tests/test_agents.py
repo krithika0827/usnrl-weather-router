@@ -2,6 +2,8 @@
 from datetime import datetime, timezone
 from typing import Optional
 
+import pytest
+
 from app.agents.graph import run_validation
 from app.agents.specialized.generator import generate_weather_summary
 from app.models.weather_data import WaypointForecast
@@ -61,6 +63,49 @@ def test_rain_summary_with_zero_precipitation_returns_warning():
         and "precipitation values are 0" in finding["message"]
         for finding in findings
     )
+
+
+def test_zero_precipitation_measurement_does_not_return_warning():
+    """A factual zero-precipitation statement is not a rain forecast."""
+    findings = run_validation(
+        [make_waypoint(precipitation_in=0)],
+        "Precipitation remains at 0.0 inches along the route.",
+    )
+
+    assert not any(
+        finding["field"] == "summary"
+        and "precipitation values are 0" in finding["message"]
+        for finding in findings
+    )
+
+
+def test_no_rain_statement_with_zero_precipitation_does_not_return_warning():
+    """An explicitly dry forecast should not be classified as rain."""
+    findings = run_validation(
+        [make_waypoint(precipitation_in=0)],
+        "No rain or measurable precipitation is expected along the route.",
+    )
+
+    assert not any(
+        finding["field"] == "summary"
+        and "precipitation values are 0" in finding["message"]
+        for finding in findings
+    )
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "No measurable precipitation is expected along the route.",
+        "No precipitation is expected along the route.",
+        "Dry conditions; no measurable precipitation forecast.",
+    ],
+)
+def test_negated_precipitation_phrases_do_not_return_summary_warnings(summary):
+    """Dry-route wording must not trigger rain or regeneration warnings."""
+    findings = run_validation([make_waypoint(precipitation_in=0)], summary)
+
+    assert not any(finding["field"] == "summary" for finding in findings)
 
 
 def test_negative_precipitation_returns_error():

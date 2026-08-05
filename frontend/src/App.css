@@ -148,6 +148,20 @@ button:disabled {
     min-width: 190px;
 }
 
+.weather-situation-action-button.secondary {
+    background: var(--navy-lt);
+}
+
+.weather-situation-action-button.secondary:hover {
+    background: #24497f;
+}
+
+.summary-generation-status {
+    margin-top: 12px;
+    color: var(--accent-secondary);
+    font-weight: 600;
+}
+
 .waypoint-weather-table-content {
     max-width: 100%;
 }

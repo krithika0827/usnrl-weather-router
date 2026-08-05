@@ -76,9 +76,15 @@ function RouteBoundsUpdater({points}) {
 
 function App() {
     function scrollToRouteMap() {
-        routeMapTitleRef.current?.scrollIntoView({
+        const routeMapTitle = routeMapTitleRef.current;
+        if (!routeMapTitle) return;
+
+        window.scrollTo({
+            top: Math.max(
+                0,
+                routeMapTitle.getBoundingClientRect().top + window.scrollY - 20
+            ),
             behavior: "smooth",
-            block: "start"
         });
     }
 
@@ -176,12 +182,14 @@ function App() {
 
             setVehicleName(weatherContext.vehicleName ?? "");
             setRouteName(weatherContext.routeName ?? "");
+            setSummaryMode(weatherContext.summaryMode ?? "gemini");
             setWaypointsText(JSON.stringify(importedWaypoints, null, 2));
             setWeatherData(cloneRouteWeatherData(importedRoute));
             setOriginalWeatherData(cloneRouteWeatherData(importedRoute));
             setForecastText(importedForecastText);
             setWeatherSituationText(importedForecastText);
             setValidationFindings(weatherContext.validation ?? []);
+            setSummaryStatus("");
             setError("");
         } catch (err) {
             setError(`Could not upload JSON: ${err.message}`);
@@ -195,6 +203,7 @@ function App() {
         return {
             vehicleName,
             routeName,
+            summaryMode,
             summary: forecastText,
             validation: validationFindings,
             peakValues: {
@@ -225,13 +234,15 @@ function App() {
     }
 
     // Refresh only the Weather Situation using the current editable table values.
-    async function regenerateWeatherSituation() {
+    async function regenerateWeatherSituation(mode = summaryMode) {
         if (weatherData.length === 0) {
             setError("Run a forecast before regenerating the Weather Situation.");
             return;
         }
 
         setError("");
+        setSummaryStatus("");
+        setSummaryMode(mode);
         setLoading(true);
         try {
             const response = await fetchWithTimeout("http://localhost:8000/api/v1/summary", {
@@ -242,7 +253,8 @@ function App() {
                 body: JSON.stringify({
                     route: weatherData,
                     vehicle_name: vehicleName,
-                    route_name: routeName
+                    route_name: routeName,
+                    summary_mode: mode
                 })
             });
             const data = await response.json();
@@ -251,6 +263,9 @@ function App() {
                 return;
             }
             setValidationFindings(data.validation ?? []);
+            setSummaryStatus(
+                `Weather Situation regenerated using ${data.summary_mode === "gemini" ? "Gemini" : "the deterministic generator"}.`
+            );
             if (data.summary) {
                 setForecastText(data.summary);
                 setWeatherSituationText(data.summary);
@@ -261,24 +276,6 @@ function App() {
             setLoading(false);
         }
     }
-
-    async function regenerateWeatherSituationAndScroll() {
-        scrollToRouteMap();
-        await regenerateWeatherSituation();
-    }
-
-    function regenerateAiWeatherSituation() {
-        const aiReportWipText = "AI Report generation is still WIP.";
-        setError("");
-        setForecastText(aiReportWipText);
-        setWeatherSituationText(aiReportWipText);
-    }
-
-    function regenerateAiWeatherSituationAndScroll() {
-        scrollToRouteMap();
-        regenerateAiWeatherSituation();
-    }
-
 
 // Placeholder weather report
 const placeHolderText = `Example of the "Weather Situation"
@@ -305,6 +302,10 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     const [validationFindings, setValidationFindings] = useState([]);
     const [vehicleName, setVehicleName] = useState("Borealis");
     const [routeName, setRouteName] = useState("Kessel Run");
+    // The initial forecast uses Gemini; either explicit regeneration button can
+    // then select the desired source for the current editable table.
+    const [summaryMode, setSummaryMode] = useState("gemini");
+    const [summaryStatus, setSummaryStatus] = useState("");
     const jsonUploadInputRef = useRef(null);
     const routeMapTitleRef = useRef(null);
     const weatherSituationTextAreaRef = useRef(null);
@@ -418,6 +419,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     // Submit waypoints to the forecast API and load returned route weather data.
     async function runForecast() {
         setError("");
+        setSummaryStatus("");
         setLoading(true);
         try {
             const waypoints = JSON.parse(waypointsText);
@@ -429,7 +431,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                 body: JSON.stringify({
                     waypoints: waypoints,
                     vehicle_name: vehicleName,
-                    route_name: routeName
+                    route_name: routeName,
+                    summary_mode: summaryMode
                 })
             });
             const data = await response.json();
@@ -444,6 +447,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             setWeatherData(routeWeatherData);
             setOriginalWeatherData(cloneRouteWeatherData(routeWeatherData));
             setValidationFindings(data.validation ?? []);
+            setSummaryStatus(
+                `Forecast generated using ${data.summary_mode === "gemini" ? "Gemini" : "the deterministic generator"}.`
+            );
             if (data.summary) {
                 setForecastText(data.summary);
                 setWeatherSituationText(data.summary);
@@ -827,37 +833,37 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
     function renderWeatherSituationActions({
         regenerateOnClick = regenerateWeatherSituation,
-        regenerateAiOnClick = regenerateAiWeatherSituation,
+        scrollToMapBeforeRegeneration = false,
         actionClassName = "",
         marginTop = "12px"
     } = {}) {
-        const renderGenerativeReportButton = () => (
-            <button
-                className="weather-situation-action-button"
-                onClick={regenerateOnClick}
-            >
-                Regenerate<br />
-                Generative Report
-            </button>
-        );
-
-        const renderAiReportButton = () => (
-            <button
-                className="weather-situation-action-button"
-                onClick={regenerateAiOnClick}
-            >
-                Regenerate<br />
-                AI Report (WIP)
-            </button>
-        );
+        function regenerate(mode) {
+            if (scrollToMapBeforeRegeneration) {
+                scrollToRouteMap();
+            }
+            regenerateOnClick(mode);
+        }
 
         return (
             <div
                 className={`weather-situation-actions ${actionClassName}`.trim()}
                 style={{marginTop}}
             >
-                {renderGenerativeReportButton()}
-                {renderAiReportButton()}
+                <button
+                    className="weather-situation-action-button"
+                    onClick={() => regenerate("gemini")}
+                    disabled={loading}
+                >
+                    {loading ? "Generating..." : <>Regenerate<br />Gemini Summary</>}
+                </button>
+
+                <button
+                    className="weather-situation-action-button secondary"
+                    onClick={() => regenerate("deterministic")}
+                    disabled={loading}
+                >
+                    {loading ? "Generating..." : <>Regenerate<br />Deterministic Summary</>}
+                </button>
 
                 <button
                     className="weather-situation-action-button"
@@ -1014,8 +1020,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                         </table>
                     </div>
                     {renderWeatherSituationActions({
-                        regenerateOnClick: regenerateWeatherSituationAndScroll,
-                        regenerateAiOnClick: regenerateAiWeatherSituationAndScroll,
+                        scrollToMapBeforeRegeneration: true,
                         actionClassName: "waypoint-table-actions",
                         marginTop: "16px"
                     })}
@@ -1292,6 +1297,11 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                             }}
                         />
                         {renderWeatherSituationActions()}
+                        {summaryStatus && (
+                            <p className="summary-generation-status" role="status">
+                                {summaryStatus}
+                            </p>
+                        )}
                     </div>
                 </div>
             )}
