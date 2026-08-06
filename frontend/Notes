@@ -80,6 +80,7 @@ Added red text warning if AI summary was selected but used deterministic fall ba
 Updated README Quickstart section tell user to add GEMINI_API_KEY
 Edited front end test to not use AI to prevent wasted tokens
 Added one test that will use the AI
+Separated Gemini front end test to avoid issues
 
 In Progress:
 

@@ -20,13 +20,18 @@ module.exports = defineConfig({
   projects: [
     {
       name: "chromium",
-      grepInvert: /@headed/,
+      grepInvert: /@headed|@live-gemini/,
       use: { ...devices["Desktop Chrome"], headless: true }
     },
     {
       name: "chromium-headed",
       grep: /@headed/,
       use: { ...devices["Desktop Chrome"], headless: false }
+    },
+    {
+      name: "chromium-live-gemini",
+      grep: /@live-gemini/,
+      use: { ...devices["Desktop Chrome"], headless: true }
     }
   ]
 });
