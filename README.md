@@ -1,8 +1,9 @@
 # USNRL Weather Router
 
 Generates weather forecast products along a route of waypoints. A user submits a
-list of coordinates + ETAs; the app returns a per-waypoint weather table, an
-AI-generated forecast summary, and automated validation findings.
+list of coordinates + ETAs; the app returns a per-waypoint weather table, a
+deterministic or Gemini-generated forecast summary, and automated validation
+findings.
 
 This repo currently has a **working deterministic backend** (real weather, input
 validation, graceful degradation), a generated route weather summary, and an
@@ -19,7 +20,7 @@ endpoint.
 | Open-Meteo fetch (US units, async, ETA-matched) | ✅ working | Joseph |
 | NOAA fallback + graceful degradation | ✅ working | Joseph |
 | Backend tests + CI | ✅ working | Joseph |
-| `summary` (AI forecast discussion) | ✅ generated | Krithika |
+| `summary` (deterministic or Gemini forecast discussion) | ✅ generated | Krithika |
 | `validation` (review-agent findings) | ✅ integrated | Ryan |
 | Frontend map | ✅ working | Reece |
 | Frontend table | ✅ working | Reece |
@@ -32,6 +33,7 @@ Runs the same on macOS and Windows via Docker Desktop:
 
 ```bash
 cp .env.example .env
+# Open .env file and add GEMINI_API_KEY & GEMINI_MODEL
 docker-compose up --build        # Starts front and back end
 ```
 For front-end testing: navigate to http://localhost:3000/ to access the beta front end.
@@ -65,15 +67,20 @@ return `null` weather rather than erroring — graceful degradation.)
 
 Full shapes and validation rules: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
 
-- **Input:** `{ "vehicle_name", "route_name", "waypoints": [ { "lat", "lon", "eta" }, ... ] }`
-  — names are optional; `eta` is ISO-8601 UTC, waypoints in chronological order
-  (else `422`).
+- **Input:** `{ "vehicle_name", "route_name", "summary_mode", "waypoints": [ { "lat", "lon", "eta" }, ... ] }`
+  — names are optional; `summary_mode` is `deterministic` (default) or `gemini`;
+  `eta` is ISO-8601 UTC, and waypoints must be in chronological order (else
+  `422`).
 - **Output:** `{ "route": [ {lat, lon, eta, temperature_f, wind_speed_knots,
   precipitation_in, humidity_pct} ], "summary": "Route guidance covers ...",
-  "validation": [ {"severity", "field", "message"} ] }`.
+  "summary_mode": "deterministic", "validation": [ {"severity", "field",
+  "message"} ] }`.
 - **Summary refresh:** `POST /api/v1/summary` accepts `{ "vehicle_name",
-  "route_name", "route": [...] }` from the editable weather table and
+  "route_name", "summary_mode", "route": [...] }` from the editable weather table and
   regenerates only `summary`/`validation` without fetching new forecast values.
+  `summary_mode` is `deterministic` (default) or `gemini`. Gemini uses a
+  server-side `GEMINI_API_KEY` from `.env` and falls back to deterministic text
+  with a validation warning if the key or provider is unavailable.
 
 The response shape is stable, so frontend and validation work can rely on the
 same envelope even as the summary generator improves.

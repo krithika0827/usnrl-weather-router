@@ -148,6 +148,25 @@ button:disabled {
     min-width: 190px;
 }
 
+.weather-situation-action-button.secondary {
+    background: var(--navy-lt);
+}
+
+.weather-situation-action-button.secondary:hover {
+    background: #24497f;
+}
+
+.summary-generation-status {
+    margin-bottom: 12px;
+    color: var(--accent-secondary);
+    font-weight: 600;
+}
+
+.summary-generation-status.fallback {
+    color: #ef5350;
+    font-weight: 400;
+}
+
 .waypoint-weather-table-content {
     max-width: 100%;
 }
@@ -338,6 +357,7 @@ tbody tr:hover td {
 }
 
 .wind-map-waypoint-marker[data-barb-mode="staff-only"] .wind-map-waypoint-circle-shape,
+.wind-map-waypoint-marker[data-marker-state="speed-warning"] .wind-map-waypoint-circle-shape,
 .wind-map-waypoint-marker[data-marker-state="direction-warning"] .wind-map-waypoint-circle-shape {
     fill: #ef5350;
 }

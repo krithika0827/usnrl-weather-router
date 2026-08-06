@@ -15,9 +15,11 @@ import L from "leaflet";
 
 const API_REQUEST_TIMEOUT_MS = 20000;
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
-const GENERATIVE_REPORT_TYPE = "generative";
-const AI_REPORT_TYPE = "ai";
-const AI_REPORT_WIP_TEXT = "AI Report generation is still WIP.";
+const DETERMINISTIC_SUMMARY_MODE = "deterministic";
+const GEMINI_SUMMARY_MODE = "gemini";
+const LEGACY_AI_REPORT_WIP_TEXT = "AI Report generation is still WIP.";
+const SUMMARY_GENERATING_TEXT = "... Generating";
+const SUMMARY_GENERATION_FAILED_TEXT = "Summary generation failed. Use Regenerate to retry.";
 const EDITABLE_WEATHER_FIELDS = [
     "temperature_f",
     "wind_speed_knots",
@@ -30,19 +32,32 @@ function cloneRouteWeatherData(route) {
     return route.map((wp) => ({...wp}));
 }
 
-function normalizeWeatherSituationReportType(value) {
-    if (typeof value !== "string") return GENERATIVE_REPORT_TYPE;
+function normalizeSummaryMode(value) {
+    if (typeof value !== "string") return DETERMINISTIC_SUMMARY_MODE;
 
     const normalizedValue = value.trim().toLowerCase();
-    return normalizedValue === AI_REPORT_TYPE || normalizedValue === "ai report"
-        ? AI_REPORT_TYPE
-        : GENERATIVE_REPORT_TYPE;
+    return normalizedValue === GEMINI_SUMMARY_MODE
+    || normalizedValue === "ai"
+    || normalizedValue === "ai report"
+        ? GEMINI_SUMMARY_MODE
+        : DETERMINISTIC_SUMMARY_MODE;
 }
 
-function getWeatherSituationReportTypeLabel(reportType) {
-    return normalizeWeatherSituationReportType(reportType) === AI_REPORT_TYPE
-        ? "AI Report"
-        : "Generative Report";
+function getSummaryModeLabel(summaryMode) {
+    return normalizeSummaryMode(summaryMode) === GEMINI_SUMMARY_MODE
+        ? "Gemini Summary"
+        : "Deterministic Summary";
+}
+
+function getSummaryGeneratorLabel(summaryMode) {
+    return normalizeSummaryMode(summaryMode) === GEMINI_SUMMARY_MODE
+        ? "Gemini"
+        : "the deterministic generator";
+}
+
+function isFallbackSummaryStatus(summaryStatus) {
+    return typeof summaryStatus === "string"
+        && summaryStatus.toLowerCase().includes("fell back");
 }
 
 function getApiBaseUrl() {
@@ -105,9 +120,15 @@ function RouteBoundsUpdater({points}) {
 
 function App() {
     function scrollToRouteMap() {
-        routeMapTitleRef.current?.scrollIntoView({
+        const routeMapTitle = routeMapTitleRef.current;
+        if (!routeMapTitle) return;
+
+        window.scrollTo({
+            top: Math.max(
+                0,
+                routeMapTitle.getBoundingClientRect().top + window.scrollY - 20
+            ),
             behavior: "smooth",
-            block: "start"
         });
     }
 
@@ -202,23 +223,26 @@ function App() {
                 eta: wp.eta
             }));
             const importedForecastText = weatherContext.summary ?? "";
-            const importedReportType =
+            const importedSummaryMode = normalizeSummaryMode(
+                weatherContext.summaryMode ??
                 weatherContext.reportType ??
-                (importedForecastText === AI_REPORT_WIP_TEXT
-                    ? AI_REPORT_TYPE
-                    : GENERATIVE_REPORT_TYPE);
+                (
+                    importedForecastText === LEGACY_AI_REPORT_WIP_TEXT
+                        ? GEMINI_SUMMARY_MODE
+                        : DETERMINISTIC_SUMMARY_MODE
+                )
+            );
 
             setVehicleName(weatherContext.vehicleName ?? "");
             setRouteName(weatherContext.routeName ?? "");
+            setSummaryMode(importedSummaryMode);
             setWaypointsText(JSON.stringify(importedWaypoints, null, 2));
             setWeatherData(cloneRouteWeatherData(importedRoute));
             setOriginalWeatherData(cloneRouteWeatherData(importedRoute));
             setForecastText(importedForecastText);
             setWeatherSituationText(importedForecastText);
-            setWeatherSituationReportType(
-                normalizeWeatherSituationReportType(importedReportType)
-            );
             setValidationFindings(weatherContext.validation ?? []);
+            setSummaryStatus("");
             setError("");
         } catch (err) {
             setError(`Could not upload JSON: ${err.message}`);
@@ -232,7 +256,10 @@ function App() {
         return {
             vehicleName,
             routeName,
-            reportType: weatherSituationReportType,
+            summaryMode,
+            reportType: normalizeSummaryMode(summaryMode) === GEMINI_SUMMARY_MODE
+                ? "ai"
+                : "generative",
             summary: forecastText,
             validation: validationFindings,
             peakValues: {
@@ -262,63 +289,102 @@ function App() {
         };
     }
 
+    function buildSummaryStatusMessage(actionVerb, requestedMode, actualMode, validationFindings) {
+        const statusMessage = `Weather Situation ${actionVerb} using ${getSummaryGeneratorLabel(actualMode)}.`;
+
+        if (
+            normalizeSummaryMode(requestedMode) === GEMINI_SUMMARY_MODE
+            && normalizeSummaryMode(actualMode) !== GEMINI_SUMMARY_MODE
+        ) {
+            const geminiValidationMessage = (validationFindings ?? [])
+                .map((finding) => finding?.message ?? "")
+                .find((message) => message.toLowerCase().includes("gemini"));
+
+            if (geminiValidationMessage?.includes("GEMINI_API_KEY")) {
+                return `${statusMessage} Gemini is not configured, so the app fell back to the deterministic generator.`;
+            }
+
+            return `${statusMessage} Gemini was unavailable, so the app fell back to the deterministic generator.`;
+        }
+
+        return statusMessage;
+    }
+
+    function applySummaryResponse(data, requestedMode, actionVerb) {
+        const actualMode = normalizeSummaryMode(data.summary_mode ?? requestedMode);
+        const nextValidationFindings = data.validation ?? [];
+        setSummaryMode(actualMode);
+        setValidationFindings(nextValidationFindings);
+        setSummaryStatus(
+            buildSummaryStatusMessage(
+                actionVerb,
+                requestedMode,
+                actualMode,
+                nextValidationFindings
+            )
+        );
+        if (data.summary) {
+            setForecastText(data.summary);
+            setWeatherSituationText(data.summary);
+        }
+    }
+
+    async function requestSummaryForRoute(route, mode) {
+        const response = await fetchWithTimeout(buildApiUrl("/api/v1/summary"), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                route,
+                vehicle_name: vehicleName,
+                route_name: routeName,
+                summary_mode: mode
+            })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(formatForecastError(data));
+        }
+        return data;
+    }
+
+    async function waitForNextPaint() {
+        await new Promise((resolve) => {
+            if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+                window.requestAnimationFrame(() => resolve());
+                return;
+            }
+            setTimeout(resolve, 0);
+        });
+    }
+
     // Refresh only the Weather Situation using the current editable table values.
-    async function regenerateWeatherSituation() {
+    async function regenerateWeatherSituation(mode = summaryMode) {
         if (weatherData.length === 0) {
             setError("Run a forecast before regenerating the Weather Situation.");
             return;
         }
 
         setError("");
+        setSummaryMode(mode);
+        setSummaryStatus("Generating the Weather Situation...");
+        setForecastText(SUMMARY_GENERATING_TEXT);
+        setWeatherSituationText(SUMMARY_GENERATING_TEXT);
         setLoading(true);
         try {
-            const response = await fetchWithTimeout(buildApiUrl("/api/v1/summary"), {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    route: weatherData,
-                    vehicle_name: vehicleName,
-                    route_name: routeName
-                })
-            });
-            const data = await response.json();
-            if (!response.ok) {
-                setError(formatForecastError(data));
-                return;
-            }
-            setValidationFindings(data.validation ?? []);
-            if (data.summary) {
-                setForecastText(data.summary);
-                setWeatherSituationText(data.summary);
-                setWeatherSituationReportType(GENERATIVE_REPORT_TYPE);
-            }
+            await waitForNextPaint();
+            const data = await requestSummaryForRoute(weatherData, mode);
+            applySummaryResponse(data, mode, "regenerated");
         } catch (err) {
             setError(err.message);
+            setSummaryStatus("Weather Situation regeneration failed.");
+            setForecastText(SUMMARY_GENERATION_FAILED_TEXT);
+            setWeatherSituationText(SUMMARY_GENERATION_FAILED_TEXT);
         } finally {
             setLoading(false);
         }
     }
-
-    async function regenerateWeatherSituationAndScroll() {
-        scrollToRouteMap();
-        await regenerateWeatherSituation();
-    }
-
-    function regenerateAiWeatherSituation() {
-        setError("");
-        setForecastText(AI_REPORT_WIP_TEXT);
-        setWeatherSituationText(AI_REPORT_WIP_TEXT);
-        setWeatherSituationReportType(AI_REPORT_TYPE);
-    }
-
-    function regenerateAiWeatherSituationAndScroll() {
-        scrollToRouteMap();
-        regenerateAiWeatherSituation();
-    }
-
-
 // Placeholder weather report
 const placeHolderText = `Example of the "Weather Situation"
 THE <VEHICLE NAME> WILL CONTINUE TO TRANSIT BEHIND A COLD FRONT THAT HAS BECOME STATIONARY IN THE <LOCATION>. THE VESSELS WILL EXPERIENCE STEADY NORTHEAST WINDS OF 15-25 KNOTS WITH GUSTS TO 35 KNOTS FOR THE FIRST HALF OF THIS FORECAST.
@@ -339,14 +405,15 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     const [originalWeatherData, setOriginalWeatherData] = useState([]);
     const [forecastText, setForecastText] = useState(placeHolderText);
     const [weatherSituationText, setWeatherSituationText] = useState(placeHolderText);
-    const [weatherSituationReportType, setWeatherSituationReportType] = useState(
-        GENERATIVE_REPORT_TYPE
-    );
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [validationFindings, setValidationFindings] = useState([]);
     const [vehicleName, setVehicleName] = useState("Borealis");
     const [routeName, setRouteName] = useState("Kessel Run");
+    // The initial forecast uses Gemini; either explicit regeneration button can
+    // then select the desired source for the current editable table.
+    const [summaryMode, setSummaryMode] = useState(GEMINI_SUMMARY_MODE);
+    const [summaryStatus, setSummaryStatus] = useState("");
     const jsonUploadInputRef = useRef(null);
     const routeMapTitleRef = useRef(null);
     const weatherSituationTextAreaRef = useRef(null);
@@ -460,10 +527,11 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     // Submit waypoints to the forecast API and load returned route weather data.
     async function runForecast() {
         setError("");
+        setSummaryStatus("");
         setLoading(true);
         try {
             const waypoints = JSON.parse(waypointsText);
-            const response = await fetchWithTimeout(buildApiUrl("/api/v1/forecast"), {
+            const response = await fetchWithTimeout(buildApiUrl("/api/v1/forecast?include_summary=false"), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -471,7 +539,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                 body: JSON.stringify({
                     waypoints: waypoints,
                     vehicle_name: vehicleName,
-                    route_name: routeName
+                    route_name: routeName,
+                    summary_mode: summaryMode
                 })
             });
             const data = await response.json();
@@ -485,11 +554,21 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             const routeWeatherData = cloneRouteWeatherData(data.route ?? []);
             setWeatherData(routeWeatherData);
             setOriginalWeatherData(cloneRouteWeatherData(routeWeatherData));
-            setValidationFindings(data.validation ?? []);
-            if (data.summary) {
-                setForecastText(data.summary);
-                setWeatherSituationText(data.summary);
-                setWeatherSituationReportType(GENERATIVE_REPORT_TYPE);
+            setValidationFindings([]);
+            setForecastText(SUMMARY_GENERATING_TEXT);
+            setWeatherSituationText(SUMMARY_GENERATING_TEXT);
+            setSummaryStatus("Weather data loaded. Generating the Weather Situation...");
+
+            await waitForNextPaint();
+
+            try {
+                const summaryData = await requestSummaryForRoute(routeWeatherData, summaryMode);
+                applySummaryResponse(summaryData, summaryMode, "generated");
+            } catch (summaryError) {
+                setError(summaryError.message);
+                setSummaryStatus("Weather data loaded. Summary generation failed.");
+                setForecastText(SUMMARY_GENERATION_FAILED_TEXT);
+                setWeatherSituationText(SUMMARY_GENERATION_FAILED_TEXT);
             }
         } catch (err) {
             setError(err.message);
@@ -593,11 +672,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     }
 
     function isAbsentWindDirectionForMap(value) {
-        if (isZeroWindValue(value)) {
-            return true;
-        }
-
-        return !getWindDirectionDisplay(value).isAvailable;
+        return isZeroWindDirectionForMap(value) || !getWindDirectionDisplay(value).isAvailable;
     }
 
     function shouldHideWindMapMarker(windSpeed, windDirection) {
@@ -611,6 +686,36 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         return (
             !isAbsentWindSpeedForMap(windSpeed) &&
             isAbsentWindDirectionForMap(windDirection)
+        );
+    }
+
+    function isBlankWindDirectionForMap(value) {
+        return value === null || value === undefined || value === "";
+    }
+
+    function isZeroWindDirectionForMap(value) {
+        if (isBlankWindDirectionForMap(value)) {
+            return false;
+        }
+
+        const number = Number(value);
+        return Number.isFinite(number) && number === 0;
+    }
+
+    function shouldShowNeutralNoWindMarker(windSpeed, windDirection) {
+        return (
+            isAbsentWindSpeedForMap(windSpeed) &&
+            (
+                isBlankWindDirectionForMap(windDirection) ||
+                isZeroWindDirectionForMap(windDirection)
+            )
+        );
+    }
+
+    function shouldShowMissingWindSpeedWarning(windSpeed, windDirection) {
+        return (
+            isAbsentWindSpeedForMap(windSpeed) &&
+            !isAbsentWindDirectionForMap(windDirection)
         );
     }
 
@@ -650,6 +755,14 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     }
 
     function getWaypointWindMarkerState(windSpeed, windDirection) {
+        if (shouldShowNeutralNoWindMarker(windSpeed, windDirection)) {
+            return "circle-only";
+        }
+
+        if (shouldShowMissingWindSpeedWarning(windSpeed, windDirection)) {
+            return "speed-warning";
+        }
+
         if (shouldHideWindMapMarker(windSpeed, windDirection)) {
             return "circle-only";
         }
@@ -668,7 +781,11 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
         const circleCenterX = width / 2;
         const circleCenterYBaseOffset = circleRadius + circlePaddingBottom;
 
-        if (markerState === "circle-only" || markerState === "direction-warning") {
+        if (
+            markerState === "circle-only"
+            || markerState === "direction-warning"
+            || markerState === "speed-warning"
+        ) {
             const height = circleRadius * 2 + circlePaddingBottom * 2;
             return {
                 width,
@@ -812,9 +929,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
         let title = `Waypoint ${waypointNumber}`;
         if (markerState === "barb") {
-            title = isAbsentWindSpeedForMap(windSpeed)
-                ? `Waypoint ${waypointNumber}: wind direction ${windDirection.label}, speed unavailable`
-                : `Waypoint ${waypointNumber}: wind ${windSpeed} knots from ${windDirection.label}`;
+            title = `Waypoint ${waypointNumber}: wind ${windSpeed} knots from ${windDirection.label}`;
+        } else if (markerState === "speed-warning") {
+            title = `Waypoint ${waypointNumber}: wind direction ${windDirection.label}, speed unavailable`;
         } else if (markerState === "direction-warning") {
             title = `Waypoint ${waypointNumber}: wind direction unavailable`;
         } else if (markerState === "circle-only") {
@@ -879,37 +996,37 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
 
     function renderWeatherSituationActions({
         regenerateOnClick = regenerateWeatherSituation,
-        regenerateAiOnClick = regenerateAiWeatherSituation,
+        scrollToMapBeforeRegeneration = false,
         actionClassName = "",
         marginTop = "12px"
     } = {}) {
-        const renderGenerativeReportButton = () => (
-            <button
-                className="weather-situation-action-button"
-                onClick={regenerateOnClick}
-            >
-                Regenerate<br />
-                Generative Report
-            </button>
-        );
-
-        const renderAiReportButton = () => (
-            <button
-                className="weather-situation-action-button"
-                onClick={regenerateAiOnClick}
-            >
-                Regenerate<br />
-                AI Report (WIP)
-            </button>
-        );
+        function regenerate(mode) {
+            if (scrollToMapBeforeRegeneration) {
+                scrollToRouteMap();
+            }
+            regenerateOnClick(mode);
+        }
 
         return (
             <div
                 className={`weather-situation-actions ${actionClassName}`.trim()}
                 style={{marginTop}}
             >
-                {renderGenerativeReportButton()}
-                {renderAiReportButton()}
+                <button
+                    className="weather-situation-action-button"
+                    onClick={() => regenerate(GEMINI_SUMMARY_MODE)}
+                    disabled={loading}
+                >
+                    {loading ? "Generating..." : <>Regenerate<br />Gemini Summary</>}
+                </button>
+
+                <button
+                    className="weather-situation-action-button secondary"
+                    onClick={() => regenerate(DETERMINISTIC_SUMMARY_MODE)}
+                    disabled={loading}
+                >
+                    {loading ? "Generating..." : <>Regenerate<br />Deterministic Summary</>}
+                </button>
 
                 <button
                     className="weather-situation-action-button"
@@ -1066,8 +1183,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                         </table>
                     </div>
                     {renderWeatherSituationActions({
-                        regenerateOnClick: regenerateWeatherSituationAndScroll,
-                        regenerateAiOnClick: regenerateAiWeatherSituationAndScroll,
+                        scrollToMapBeforeRegeneration: true,
                         actionClassName: "waypoint-table-actions",
                         marginTop: "16px"
                     })}
@@ -1326,12 +1442,24 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     <div className="card-header">
                         <h2>Weather Situation</h2>
                         <span className="badge muted">
-                            {getWeatherSituationReportTypeLabel(weatherSituationReportType)}
+                            {getSummaryModeLabel(summaryMode)}
                         </span>
                         <span className="badge muted">Editable</span>
                     </div>
                     {/* Weather Situation */}
                     <div style={{padding: "20px"}}>
+                        {summaryStatus && (
+                            <p
+                                className={`summary-generation-status ${
+                                    isFallbackSummaryStatus(summaryStatus)
+                                        ? "fallback"
+                                        : ""
+                                }`.trim()}
+                                role="status"
+                            >
+                                {summaryStatus}
+                            </p>
+                        )}
                         <textarea
                             ref={weatherSituationTextAreaRef}
                             aria-label="Weather Situation"

@@ -72,6 +72,14 @@ Improves map hover over waypoint detection
 Updated test to account for changed text and removed emojis
 Added a small "AI Report"/"Generative Report" text to specify what report type is shown
 Added a wait for the forecast response
+Merge branch 'main' into Front-end-beta, fixed merge issues
+Change page load order to allow partal load while waiting for AI generation
+Improved generating message text and layout
+ensure re-generation notify users of status
+Added red text warning if AI summary was selected but used deterministic fall back
+Updated README Quickstart section tell user to add GEMINI_API_KEY
+Edited front end test to not use AI to prevent wasted tokens
+Added one test that will use the AI
 
 In Progress:
 
