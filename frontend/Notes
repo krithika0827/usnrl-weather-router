@@ -81,6 +81,7 @@ Updated README Quickstart section tell user to add GEMINI_API_KEY
 Edited front end test to not use AI to prevent wasted tokens
 Added one test that will use the AI
 Separated Gemini front end test to avoid issues
+removed some unused legacy code
 
 In Progress:
 

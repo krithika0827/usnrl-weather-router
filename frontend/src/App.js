@@ -17,7 +17,6 @@ const API_REQUEST_TIMEOUT_MS = 20000;
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
 const DETERMINISTIC_SUMMARY_MODE = "deterministic";
 const GEMINI_SUMMARY_MODE = "gemini";
-const LEGACY_AI_REPORT_WIP_TEXT = "AI Report generation is still WIP.";
 const SUMMARY_GENERATING_TEXT = "... Generating";
 const SUMMARY_GENERATION_FAILED_TEXT = "Summary generation failed. Use Regenerate to retry.";
 const EDITABLE_WEATHER_FIELDS = [
@@ -37,8 +36,6 @@ function normalizeSummaryMode(value) {
 
     const normalizedValue = value.trim().toLowerCase();
     return normalizedValue === GEMINI_SUMMARY_MODE
-    || normalizedValue === "ai"
-    || normalizedValue === "ai report"
         ? GEMINI_SUMMARY_MODE
         : DETERMINISTIC_SUMMARY_MODE;
 }
@@ -223,15 +220,7 @@ function App() {
                 eta: wp.eta
             }));
             const importedForecastText = weatherContext.summary ?? "";
-            const importedSummaryMode = normalizeSummaryMode(
-                weatherContext.summaryMode ??
-                weatherContext.reportType ??
-                (
-                    importedForecastText === LEGACY_AI_REPORT_WIP_TEXT
-                        ? GEMINI_SUMMARY_MODE
-                        : DETERMINISTIC_SUMMARY_MODE
-                )
-            );
+            const importedSummaryMode = normalizeSummaryMode(weatherContext.summaryMode);
 
             setVehicleName(weatherContext.vehicleName ?? "");
             setRouteName(weatherContext.routeName ?? "");
@@ -257,9 +246,6 @@ function App() {
             vehicleName,
             routeName,
             summaryMode,
-            reportType: normalizeSummaryMode(summaryMode) === GEMINI_SUMMARY_MODE
-                ? "ai"
-                : "generative",
             summary: forecastText,
             validation: validationFindings,
             peakValues: {
