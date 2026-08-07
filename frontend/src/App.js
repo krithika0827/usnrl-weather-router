@@ -221,10 +221,17 @@ function App() {
             }));
             const importedForecastText = weatherContext.summary ?? "";
             const importedSummaryMode = normalizeSummaryMode(weatherContext.summaryMode);
+            // `summaryMode` in the file records the generator that actually ran,
+            // so restoring the request from it would turn a past fallback into
+            // the next run's preference. Files written before the export carried
+            // the request fall back to the default instead.
+            const importedRequestedSummaryMode = normalizeSummaryMode(
+                weatherContext.requestedSummaryMode ?? GEMINI_SUMMARY_MODE
+            );
 
             setVehicleName(weatherContext.vehicleName ?? "");
             setRouteName(weatherContext.routeName ?? "");
-            setRequestedSummaryMode(importedSummaryMode);
+            setRequestedSummaryMode(importedRequestedSummaryMode);
             setSummaryMode(importedSummaryMode);
             setWaypointsText(JSON.stringify(importedWaypoints, null, 2));
             setWeatherData(cloneRouteWeatherData(importedRoute));
@@ -246,7 +253,11 @@ function App() {
         return {
             vehicleName,
             routeName,
+            // The generator that ran, then the one that was asked for. Keeping
+            // both means a re-upload restores the request instead of inheriting
+            // whatever a fallback left behind.
             summaryMode,
+            requestedSummaryMode,
             summary: forecastText,
             validation: validationFindings,
             peakValues: {
