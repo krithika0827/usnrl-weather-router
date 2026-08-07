@@ -13,7 +13,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 
-const API_REQUEST_TIMEOUT_MS = 20000;
+const API_REQUEST_TIMEOUT_MS = 40000;
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
 const DETERMINISTIC_SUMMARY_MODE = "deterministic";
 const GEMINI_SUMMARY_MODE = "gemini";
@@ -78,7 +78,7 @@ async function fetchWithTimeout(url, options) {
         });
     } catch (error) {
         if (error.name === "AbortError") {
-            throw new Error("Request timed out after 20 seconds.");
+            throw new Error(`Request timed out after ${API_REQUEST_TIMEOUT_MS / 1000} seconds.`);
         }
         throw error;
     } finally {
