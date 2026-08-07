@@ -1,7 +1,9 @@
 const { test, expect } = require("@playwright/test");
 
 const SUMMARY_GENERATING_TEXT = "... Generating";
-const WEATHER_SITUATION_RESPONSE_TIMEOUT_MS = 15000;
+// Real Gemini responses take roughly 14 seconds, and this clock starts before
+// the weather fetch goes out, so the budget has to cover both round trips.
+const WEATHER_SITUATION_RESPONSE_TIMEOUT_MS = 45000;
 const LIVE_GEMINI_TEST_TAG = "@live-gemini";
 const waypointsTextOnePoint = `[
   { "lat": 36.85, "lon": -76.30, "eta": "2026-07-09T12:00:00Z" }

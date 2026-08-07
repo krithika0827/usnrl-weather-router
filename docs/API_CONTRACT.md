@@ -18,7 +18,7 @@ the summary generator fills `summary`, and the validation graph fills
 `POST /api/v1/forecast`
 
 Fetches weather for submitted waypoints, generates a summary, and validates the
-full product.
+full product. Summary generation can be deferred with `include_summary=false`.
 
 ### Input
 
@@ -48,6 +48,17 @@ time of arrival (ISO 8601, UTC).
 | `waypoints` | at least 1, at most 50 |
 | ordering | `eta` values non-decreasing (in chronological order) |
 | `summary_mode` | `deterministic` (default) or `gemini` |
+
+### Query parameters
+
+| Parameter | Default | Effect |
+|-----------|---------|--------|
+| `include_summary` | `true` | When `false`, skips summary generation and returns `summary: null` straight after the weather fetch. |
+
+The frontend uses `include_summary=false` to render the weather table while the
+narrative is still generating, then calls `POST /api/v1/summary` for the summary
+itself. `validation` is still populated on this path, but only with route-level
+findings; summary findings are omitted because no summary exists yet.
 
 ### Output
 
@@ -124,9 +135,19 @@ preserved.
 Uses the same `ForecastResponse` envelope as `/forecast`.
 
 When `summary_mode` is `gemini`, the backend sends only the route table and
-optional names to Gemini using its server-side `GEMINI_API_KEY`. If Gemini is
-not configured or unavailable, the response uses the deterministic summary and
-includes a `validation` warning explaining the fallback.
+optional names to Gemini using its server-side `GEMINI_API_KEY`. Three cases
+fall back to the deterministic summary, each reporting `summary_mode` as
+`deterministic` and adding a `validation` warning that explains which one
+happened:
+
+| Case | Warning text starts with |
+|------|--------------------------|
+| `GEMINI_API_KEY` is not configured | `Gemini was selected but GEMINI_API_KEY is not configured` |
+| Gemini errored, timed out, or returned nothing | `Gemini summary generation was unavailable` |
+| Gemini answered but the summary contradicted the route data | `Gemini summary failed validation` |
+
+The third case is decided by the validation graph, which re-runs the critic
+against the replacement summary before returning.
 
 ### `validation` entry shape
 

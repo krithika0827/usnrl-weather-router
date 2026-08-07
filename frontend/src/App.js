@@ -224,6 +224,7 @@ function App() {
 
             setVehicleName(weatherContext.vehicleName ?? "");
             setRouteName(weatherContext.routeName ?? "");
+            setRequestedSummaryMode(importedSummaryMode);
             setSummaryMode(importedSummaryMode);
             setWaypointsText(JSON.stringify(importedWaypoints, null, 2));
             setWeatherData(cloneRouteWeatherData(importedRoute));
@@ -290,6 +291,13 @@ function App() {
                 return `${statusMessage} Gemini is not configured, so the app fell back to the deterministic generator.`;
             }
 
+            // Gemini answered, but the summary contradicted the route data and
+            // the validation graph replaced it. Reporting this as "unavailable"
+            // would contradict the finding shown in the validation card.
+            if (geminiValidationMessage?.toLowerCase().includes("failed validation")) {
+                return `${statusMessage} The Gemini summary did not pass validation, so the app fell back to the deterministic generator.`;
+            }
+
             return `${statusMessage} Gemini was unavailable, so the app fell back to the deterministic generator.`;
         }
 
@@ -346,14 +354,16 @@ function App() {
     }
 
     // Refresh only the Weather Situation using the current editable table values.
-    async function regenerateWeatherSituation(mode = summaryMode) {
+    async function regenerateWeatherSituation(mode = requestedSummaryMode) {
         if (weatherData.length === 0) {
             setError("Run a forecast before regenerating the Weather Situation.");
             return;
         }
 
         setError("");
-        setSummaryMode(mode);
+        // The regeneration buttons pick the generator for the current table
+        // only. Run Forecast keeps using `requestedSummaryMode`, so a one off
+        // deterministic regeneration does not change what the next run asks for.
         setSummaryStatus("Generating the Weather Situation...");
         setForecastText(SUMMARY_GENERATING_TEXT);
         setWeatherSituationText(SUMMARY_GENERATING_TEXT);
@@ -398,6 +408,10 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
     const [routeName, setRouteName] = useState("Kessel Run");
     // The initial forecast uses Gemini; either explicit regeneration button can
     // then select the desired source for the current editable table.
+    // `requestedSummaryMode` is what the user asked for and only changes on an
+    // explicit choice, so a fallback never silently rewrites the preference.
+    // `summaryMode` is what the backend actually used, and drives the badge.
+    const [requestedSummaryMode, setRequestedSummaryMode] = useState(GEMINI_SUMMARY_MODE);
     const [summaryMode, setSummaryMode] = useState(GEMINI_SUMMARY_MODE);
     const [summaryStatus, setSummaryStatus] = useState("");
     const jsonUploadInputRef = useRef(null);
@@ -526,7 +540,7 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
                     waypoints: waypoints,
                     vehicle_name: vehicleName,
                     route_name: routeName,
-                    summary_mode: summaryMode
+                    summary_mode: requestedSummaryMode
                 })
             });
             const data = await response.json();
@@ -540,7 +554,9 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             const routeWeatherData = cloneRouteWeatherData(data.route ?? []);
             setWeatherData(routeWeatherData);
             setOriginalWeatherData(cloneRouteWeatherData(routeWeatherData));
-            setValidationFindings([]);
+            // Route findings arrive with the weather table, so they stay visible
+            // even if the follow-up summary call fails.
+            setValidationFindings(data.validation ?? []);
             setForecastText(SUMMARY_GENERATING_TEXT);
             setWeatherSituationText(SUMMARY_GENERATING_TEXT);
             setSummaryStatus("Weather data loaded. Generating the Weather Situation...");
@@ -548,8 +564,8 @@ AREAS OF SCATTERED LIGHT RAIN AND PARTLY TO MOSTLY CLOUDY SKIES ARE FORECAST THR
             await waitForNextPaint();
 
             try {
-                const summaryData = await requestSummaryForRoute(routeWeatherData, summaryMode);
-                applySummaryResponse(summaryData, summaryMode, "generated");
+                const summaryData = await requestSummaryForRoute(routeWeatherData, requestedSummaryMode);
+                applySummaryResponse(summaryData, requestedSummaryMode, "generated");
             } catch (summaryError) {
                 setError(summaryError.message);
                 setSummaryStatus("Weather data loaded. Summary generation failed.");

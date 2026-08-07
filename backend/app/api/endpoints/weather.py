@@ -12,7 +12,7 @@ degrade to null on upstream failure rather than failing the whole request.
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from app.agents.graph import run_validation_with_summary_fallback
+from app.agents.graph import run_validation, run_validation_with_summary_fallback
 from app.models.waypoint import RouteRequest
 from app.models.weather_data import ForecastResponse, SummaryMode, WaypointForecast
 from app.services import open_meteo
@@ -42,11 +42,21 @@ async def create_forecast(
     route = await open_meteo.fetch_forecasts(request.waypoints)
 
     if not include_summary:
+        # Route problems should surface with the weather table rather than
+        # waiting on the summary call, which may fail or be slow. The critic
+        # runs its waypoint-to-waypoint checks only when a summary is present,
+        # so this neutral text activates them; summary-specific findings are
+        # dropped because no summary has been generated yet.
+        route_findings = [
+            finding
+            for finding in run_validation(route, "Route data analysis.")
+            if finding.get("field") != "summary"
+        ]
         return ForecastResponse(
             route=route,
             summary=None,
             summary_mode=request.summary_mode,
-            validation=[],
+            validation=route_findings,
         )
 
     generation = await generate_summary(
