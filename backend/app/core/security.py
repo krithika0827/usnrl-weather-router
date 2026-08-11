@@ -1,6 +1,6 @@
-# Guardrails / CORS rules — Owner: Joseph
+# Guardrails / CORS rules
 """CORS configuration so the browser frontend (a different origin) can call this
-API. Without it, the browser blocks Reece's requests. Origins are the common
+API. Without it, the browser blocks the frontend's requests. Origins are the common
 React/Vite dev servers; tighten to the real deployed origin for production.
 """
 

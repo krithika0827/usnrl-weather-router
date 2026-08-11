@@ -1,4 +1,4 @@
-# LangGraph state machine orchestration — Owner: Ryan
+# LangGraph state machine orchestration
 
 from typing import Any
 

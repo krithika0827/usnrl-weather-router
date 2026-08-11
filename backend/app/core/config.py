@@ -1,4 +1,4 @@
-# Pydantic BaseSettings (API keys, env variables) — Owner: Joseph
+# Pydantic BaseSettings (API keys, env variables)
 """System-wide configuration, loaded from environment / .env.
 
 Open-Meteo needs no API key, so defaults work out of the box; values can be

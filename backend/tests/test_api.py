@@ -1,4 +1,4 @@
-# Route validation & 500-error degradation tests — Owner: Joseph
+# Route validation & 500-error degradation tests
 """Endpoint-level tests for POST /api/v1/forecast.
 
 Covers input validation (all the 422 rules) and the response envelope. The

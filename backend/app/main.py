@@ -1,4 +1,4 @@
-# Application entry point (FastAPI app instance) — Owner: Joseph
+# Application entry point (FastAPI app instance)
 """Boots the FastAPI app and mounts the v1 API.
 
 Run locally:

@@ -60,9 +60,9 @@ AI fixed 2 warnings
     test_weather.py: Expected type 'datetime', got 'str' instead
     test_agents.py: Expected type 'int', got 'None' instead
 resolved merge conflicts
-Resolved Blocking and Cleanup reported by mightyjoey in Pull Request notes
+Resolved Blocking and Cleanup items reported in Pull Request notes
 Add shared wind threshold constants TO GIT FILES
-mightyjoey helped resolved the remaining file conflicts
+Resolved the remaining file conflicts
 -
 Removed unnecessary waits in tests
 Updated tests so all run headless now
@@ -82,7 +82,7 @@ Edited front end test to not use AI to prevent wasted tokens
 Added one test that will use the AI
 Separated Gemini front end test to avoid issues
 removed some unused legacy code
-    Joe made some fixes and pulled changes from main
+    Made some fixes and pulled changes from main
 Changed 20 second AI time out to 40 seconds
 
 In Progress:

@@ -1,1 +1,1 @@
-# Waypoint ingestion & processing — Owner: Joseph
+# Waypoint ingestion & processing

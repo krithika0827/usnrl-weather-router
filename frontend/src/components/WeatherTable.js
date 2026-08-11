@@ -1,1 +1,1 @@
-// Scannable data columns per waypoint — Owner: Reece
+// Scannable data columns per waypoint

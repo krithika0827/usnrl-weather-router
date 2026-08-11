@@ -1,8 +1,9 @@
-# Structured tabular schemas — Owner: Joseph
+# Structured tabular schemas
 """Output schemas. Source of truth for the *output* half of docs/API_CONTRACT.md.
 
 Units are temperature °F, wind knots/degrees, precipitation inches, humidity %.
-This is the shape Reece renders, Krithika summarizes, and Ryan validates.
+This is the shape the frontend renders, the summary generator describes, and
+the validation agents check.
 """
 
 from datetime import datetime
@@ -41,7 +42,7 @@ class SummaryMode(str, Enum):
 
 
 class ValidationIssue(BaseModel):
-    """A consistency finding produced by the review agents (Ryan, Week 5)."""
+    """A consistency finding produced by the review agents."""
 
     severity: Severity = Severity.info
     field: str = Field(..., description="Which part of the product the issue concerns.")
@@ -52,10 +53,10 @@ class ForecastResponse(BaseModel):
     """The full product returned to the client."""
 
     route: list[WaypointForecast]
-    # Filled by Krithika's AI discussion (Week 4); null until then.
+    # Filled by the summary generator; null when summary generation is skipped.
     summary: Optional[str] = None
     # The generator that actually produced `summary`; Gemini fallbacks report
     # `deterministic` so the frontend can communicate it clearly.
     summary_mode: SummaryMode = SummaryMode.deterministic
-    # Filled by Ryan's review agents (Week 5); empty until then.
+    # Filled by the review agents; empty when there is nothing to report.
     validation: list[ValidationIssue] = Field(default_factory=list)

@@ -1,4 +1,4 @@
-# Narrative generation agent - Owners: Krithika (prompt) + Ryan (wiring)
+# Narrative generation agent
 """Create a concise operational weather discussion from route weather data.
 
 This module keeps the LLM boundary small: route data comes in as structured

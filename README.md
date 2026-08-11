@@ -1,57 +1,120 @@
 # USNRL Weather Router
 
 Generates weather forecast products along a route of waypoints. A user submits a
-list of coordinates + ETAs; the app returns a per-waypoint weather table, a
-deterministic or Gemini-generated forecast summary, and automated validation
+list of coordinates and ETAs; the app returns a per-waypoint weather table, a
+deterministic or Gemini-generated forecast discussion, and automated validation
 findings.
 
-This repo currently has a **working deterministic backend** (real weather, input
-validation, graceful degradation), a generated route weather summary, and an
-integrated validation workflow that returns findings through the forecast
-endpoint.
+The full stack is working: real weather retrieval with graceful degradation,
+summary generation in two modes, a validation workflow, and a React frontend
+with a map, an editable weather table, and JSON import/export.
 
+## Setup
 
-## Status
+Runs the same on macOS and Windows via Docker Desktop.
 
-| Piece | State | Owner |
-|-------|-------|-------|
-| `POST /api/v1/forecast` — validation + real weather | ✅ working | Joseph |
-| `POST /api/v1/summary` — regenerate from edited table | ✅ working | Krithika |
-| Open-Meteo fetch (US units, async, ETA-matched) | ✅ working | Joseph |
-| NOAA fallback + graceful degradation | ✅ working | Joseph |
-| Backend tests + CI | ✅ working | Joseph |
-| `summary` (deterministic or Gemini forecast discussion) | ✅ generated | Krithika |
-| `validation` (review-agent findings) | ✅ integrated | Ryan |
-| Frontend map | ✅ working | Reece |
-| Frontend table | ✅ working | Reece |
-| Frontend table ranges | ✅ working | Reece |
-| Frontend forecast box | ✅ displays backend summary | Reece |
+**1. Create a Gemini API key** at
+[aistudio.google.com/apikey](https://aistudio.google.com/apikey). Click **Create
+API key**; no billing setup is needed for the free tier.
 
-## Quickstart
-
-Runs the same on macOS and Windows via Docker Desktop:
+**2. Create your `.env`** from the repo root:
 
 ```bash
 cp .env.example .env
-# Open .env file and add GEMINI_API_KEY & GEMINI_MODEL
-docker-compose up --build        # Starts front and back end
 ```
-For front-end testing: navigate to http://localhost:3000/ to access the beta front end.
 
-The following features are currently functional: User input, Weather table, Display value range, Map display.
+**3. In `.env`, uncomment and fill these two lines:**
 
-The weather report is generated from the backend route weather data and remains
-editable in the frontend.
+```bash
+GEMINI_API_KEY=AIza...your_key_here
+GEMINI_MODEL=gemini-3.5-flash
+```
 
-----------------------------------------------------------------------------------------------------
+The key is read server-side only, by `backend/app/services/summary_generator.py`.
+`.env` is gitignored, so it stays out of source control and out of the browser.
 
+**4. Start it:**
 
-For backend testing:
-Then open **http://127.0.0.1:8000/docs** for interactive API docs — the easiest
-way to try `POST /api/v1/forecast`: click **Try it out**, paste a request body,
-and hit **Execute**.
+```bash
+docker compose up --build
+```
 
-### Example request body
+Then open:
+
+- **App:** http://localhost:3000. A sample route is prefilled; click
+  **Run Forecast**.
+- **API docs:** http://localhost:8000/docs, health check:
+  http://localhost:8000/health
+
+The first forecast asks Gemini for the weather situation. If the key is missing
+or the model name is one your key cannot call, the app still works: it falls
+back to the deterministic summary and says so in red. Settings are read once at
+startup, so after editing `.env` run
+`docker compose up -d --force-recreate backend`.
+
+### Running without Docker
+
+```bash
+# backend
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload         # http://127.0.0.1:8000
+
+# frontend
+cd frontend
+npm install
+npm start                             # http://localhost:3000
+```
+
+The frontend reads the backend location from `REACT_APP_API_BASE_URL`
+(see `frontend/.env.example`, default `http://localhost:8000`).
+
+## Summary modes
+
+Every forecast comes with a written weather situation, from one of two
+generators. **Gemini** needs the API key from setup. **Deterministic** runs
+locally with no key and no network, so the app is fully usable without Gemini.
+
+Pick either one at any time with the **Regenerate Gemini Summary** and
+**Regenerate Deterministic Summary** buttons; the Weather Situation header names
+the generator that produced the text you are reading. Against the API, send
+`summary_mode` as `gemini` or `deterministic` and check which one comes back in
+the response.
+
+### When Gemini falls back
+
+Gemini requests never fail the response. In three cases the backend returns the
+deterministic summary instead, reports `summary_mode` as `deterministic`, and
+adds a `validation` warning that the frontend shows in red:
+
+| Case | What the app tells the user |
+|------|-----------------------------|
+| `GEMINI_API_KEY` is not set | Gemini is not configured, so the app fell back to the deterministic generator |
+| Gemini errored, timed out, or returned nothing | Gemini was unavailable, so the app fell back to the deterministic generator |
+| The Gemini summary contradicted the route data | The Gemini summary did not pass validation, so the app fell back to the deterministic generator |
+
+The third case comes from the validation graph, which re-runs the critic against
+the Gemini text before returning it.
+
+## Using the app
+
+1. Enter waypoints (latitude, longitude, ETA), plus an optional route name and
+   vehicle name.
+2. Run the forecast. The weather table and map render first, then the forecast
+   discussion arrives once generation finishes.
+3. Edit any table value, then regenerate to rewrite the discussion from your
+   edits without refetching weather.
+4. **Download** saves the current weather context as JSON; **Upload JSON**
+   restores it.
+
+Estimated travel time and distance are computed from the waypoints, and wind
+barbs on the map show speed and direction per waypoint.
+
+## Trying the API directly
+
+The easiest path is **http://localhost:8000/docs**: click **Try it out** on
+`POST /api/v1/forecast`, paste a request body, and hit **Execute**.
+
 ```json
 {
   "waypoints": [
@@ -60,77 +123,75 @@ and hit **Execute**.
   ]
 }
 ```
-(Use ETAs within ~16 days — Open-Meteo's forecast horizon. Older/farther dates
-return `null` weather rather than erroring — graceful degradation.)
+
+Use ETAs within about 16 days, which is Open-Meteo's forecast horizon. Dates
+outside it return `null` weather values rather than erroring.
 
 ## The API contract
 
-Full shapes and validation rules: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
+Request and response shapes, validation rules, and the fallback cases:
+[`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
 
-- **Input:** `{ "vehicle_name", "route_name", "summary_mode", "waypoints": [ { "lat", "lon", "eta" }, ... ] }`
-  — names are optional; `summary_mode` is `deterministic` (default) or `gemini`;
-  `eta` is ISO-8601 UTC, and waypoints must be in chronological order (else
-  `422`).
-- **Output:** `{ "route": [ {lat, lon, eta, temperature_f, wind_speed_knots,
-  precipitation_in, humidity_pct} ], "summary": "Route guidance covers ...",
-  "summary_mode": "deterministic", "validation": [ {"severity", "field",
-  "message"} ] }`.
-- **Summary refresh:** `POST /api/v1/summary` accepts `{ "vehicle_name",
-  "route_name", "summary_mode", "route": [...] }` from the editable weather table and
-  regenerates only `summary`/`validation` without fetching new forecast values.
-  `summary_mode` is `deterministic` (default) or `gemini`. Gemini uses a
-  server-side `GEMINI_API_KEY` from `.env` and falls back to deterministic text
-  with a validation warning if the key or provider is unavailable.
+- `POST /api/v1/forecast` fetches weather for a route, then generates and
+  validates the summary. Add `?include_summary=false` to get the weather table
+  immediately with `summary: null`.
+- `POST /api/v1/summary` regenerates only `summary`/`validation` from the
+  current table values, so manual edits survive and no weather is refetched.
 
-The response shape is stable, so frontend and validation work can rely on the
-same envelope even as the summary generator improves.
+## How a request flows
 
-## Getting started by lane
+```
+frontend  ->  POST /api/v1/forecast
+              services/open_meteo.py   fetch weather per waypoint (NOAA fallback)
+              services/summary_generator.py   deterministic or Gemini discussion
+              agents/graph.py          validation workflow over route + summary
+          <-  { route, summary, summary_mode, validation }
+```
 
-First, everyone: `docker-compose up backend`, confirm http://localhost:8000/docs
-works, then branch off `main` for your part (one reviewer approves before merge).
-
-**Reece — frontend**
-1. With the backend running, build the React app in `frontend/src/` (fill `App.js`
-   + `components/MapView.js`, `WeatherTable.js`, `ForecastBox.js`, and your
-   `package.json` / `Dockerfile`).
-2. Call `POST http://localhost:8000/api/v1/forecast` directly — CORS is enabled
-   for `localhost:3000` / `:5173`, no mocking needed.
-3. Render `route[]` in the table/map. Design the forecast box to handle `summary`
-   (null) and `validation` (empty) gracefully — they light up once the AI lanes land.
-
-**Krithika — AI summary**
-1. Hit the endpoint to pull real `route` JSON.
-2. Design the prompt that turns that weather table into the `summary` discussion,
-   in `backend/app/agents/specialized/generator.py`.
-3. Keep the generator output consistent with Ryan's validation checks.
-
-**Ryan — validation agents**
-1. Build the LangGraph flow in `backend/app/agents/` (`graph.py`, `state.py`,
-   `specialized/critic.py`).
-2. Read `route` + `summary`, emit `validation[]` findings (`severity`/`field`/
-   `message`, per the contract).
-3. Start against a sample `route`+`summary` payload until the summary firms up.
-
-**Integration:** `backend/app/api/endpoints/weather.py` calls Krithika's summary
-generator, then passes the generated text and route table into Ryan's validation
-graph.
+The response envelope is stable, so the frontend can rely on the same shape
+regardless of which summary generator ran.
 
 ## Backend layout (`backend/app/`)
 
 ```
-main.py              FastAPI app + CORS
-api/router.py        aggregates routers
-api/endpoints/       weather.py = POST /forecast
-core/                config.py (settings), security.py (CORS)
-services/            open_meteo.py (primary), noaa.py (fallback)
-models/              waypoint.py (input + validation), weather_data.py (output)
-tests/               test_api.py (endpoint), test_weather.py (service, mocked)
+main.py                          FastAPI app, CORS, GET /health
+api/router.py                    aggregates routers
+api/endpoints/weather.py         POST /forecast, POST /summary
+api/endpoints/routes.py          waypoint ingestion helpers
+core/                            config.py (settings), security.py (CORS)
+services/open_meteo.py           primary weather source
+services/noaa.py                 fallback weather source
+services/summary_generator.py    picks deterministic or Gemini generation
+agents/graph.py                  LangGraph validation workflow
+agents/state.py                  shared agent state
+agents/specialized/generator.py  deterministic forecast discussion
+agents/specialized/critic.py     consistency checks that produce validation
+agents/specialized/wind_thresholds.py   shared wind constants
+tests/                           test_api.py, test_weather.py, test_agents.py
 ```
+
+## Frontend layout (`frontend/`)
+
+The whole UI lives in `src/App.js` (inputs, map, weather table, forecast box);
+`src/components/` currently holds placeholder files. Playwright specs are in
+`tests/`, configured by `playwright.config.js`.
 
 ## Tests
 
 ```bash
-docker compose run --rm backend pytest -q    # 27 tests, fully mocked — no network
+# backend: 44 tests, fully mocked, no network
+docker compose run --rm backend pytest -q
+
+# frontend end-to-end (needs the backend running on :8000)
+cd frontend
+npm install
+npx playwright install chromium
+npm run test:e2e            # headless, skips the live-Gemini spec
+npm run test:e2e:gemini     # the one spec that calls the real Gemini API
 ```
-CI (`.github/workflows/test.yml`) runs the same suite on every push and PR.
+
+`test:e2e:gemini` spends real API tokens, so it is kept out of the default run.
+
+CI (`.github/workflows/test.yml`) runs both suites on every push and pull
+request: backend pytest, and the Playwright suite against a live backend
+started by the workflow.

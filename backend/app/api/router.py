@@ -1,4 +1,4 @@
-# Combines all routers — Owner: Joseph
+# Combines all routers
 """Aggregates the v1 endpoint routers into a single APIRouter mounted by main."""
 
 from fastapi import APIRouter

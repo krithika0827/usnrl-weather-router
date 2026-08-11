@@ -1,4 +1,4 @@
-# Open-Meteo mock API responses — Owner: Joseph
+# Open-Meteo mock API responses
 """Service-layer tests for the weather fetch + NOAA fallback logic.
 
 Both upstream APIs are mocked with respx, so these tests make no real network

@@ -1,1 +1,1 @@
-// Leaflet.js route overlay map — Owner: Reece
+// Leaflet.js route overlay map

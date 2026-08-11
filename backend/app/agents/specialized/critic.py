@@ -1,4 +1,4 @@
-# QA critique agent / validation — Owner: Ryan
+# QA critique agent / validation
 
 import re
 from typing import Any, List

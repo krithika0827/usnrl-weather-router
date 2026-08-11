@@ -1,4 +1,4 @@
-# Forecast triggering endpoints — Owner: Joseph
+# Forecast triggering endpoints
 """POST /api/v1/forecast.
 
 Validates a route and returns a forecast product for each waypoint, with real

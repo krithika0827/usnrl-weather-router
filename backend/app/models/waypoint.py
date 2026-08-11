@@ -1,4 +1,4 @@
-# Lat, Lon, ISO timestamp validation — Owner: Joseph
+# Lat, Lon, ISO timestamp validation
 """Input schemas. Source of truth for the *input* half of docs/API_CONTRACT.md."""
 
 from datetime import datetime
