@@ -1,4 +1,4 @@
-# Shared agent state definitions — Owner: Ryan
+# Shared agent state definitions
 
 from typing import List, NotRequired, Optional, TypedDict, Union
 

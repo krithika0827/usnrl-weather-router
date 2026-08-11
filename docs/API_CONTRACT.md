@@ -1,11 +1,11 @@
-# API Contract (DRAFT — for team review)
+# API Contract
 
-This is the single shape every lane builds against:
+This is the single response shape the whole app builds against:
 
-- **Reece (frontend)** renders this output.
-- **Joseph (backend)** produces it from Open-Meteo.
-- **Krithika (AI)** generates `summary` *from* the `route` table.
-- **Ryan (agents)** fills `validation` by checking `summary` against `route`.
+- The frontend renders this output.
+- The weather services produce `route` from Open-Meteo, with NOAA as a fallback.
+- The summary generator produces `summary` *from* the `route` table.
+- The validation graph fills `validation` by checking `summary` against `route`.
 
 The response envelope is stable: deterministic weather retrieval fills `route`,
 the summary generator fills `summary`, and the validation graph fills
@@ -86,19 +86,19 @@ findings; summary findings are omitted because no summary exists yet.
 
 | Field | Type | Filled by | Notes |
 |-------|------|-----------|-------|
-| `route[].lat/lon/eta` | echo of input | Joseph | identifies the waypoint |
-| `route[].temperature_f` | number \| null | Joseph | Fahrenheit (°F) |
-| `route[].wind_speed_knots` | number \| null | Joseph | knots |
-| `route[].wind_direction_deg` | number \| null | Joseph | wind direction in degrees |
-| `route[].precipitation_in` | number \| null | Joseph | inches |
-| `route[].humidity_pct` | integer \| null | Joseph | relative humidity % |
-| `summary` | string \| null | Krithika | Generated forecast discussion from the route table |
+| `route[].lat/lon/eta` | echo of input | weather services | identifies the waypoint |
+| `route[].temperature_f` | number \| null | weather services | Fahrenheit (°F) |
+| `route[].wind_speed_knots` | number \| null | weather services | knots |
+| `route[].wind_direction_deg` | number \| null | weather services | wind direction in degrees |
+| `route[].precipitation_in` | number \| null | weather services | inches |
+| `route[].humidity_pct` | integer \| null | weather services | relative humidity % |
+| `summary` | string \| null | summary generator | Generated forecast discussion from the route table |
 | `summary_mode` | string | backend | Generator that actually produced the summary (`deterministic` or `gemini`) |
-| `validation` | array | Ryan | Review-agent findings |
+| `validation` | array | validation graph | Review-agent findings |
 
 Every weather field is **nullable**: if a source is unavailable for a waypoint,
-that field is `null` rather than failing the whole request (proposal §4 —
-"99% graceful degradation").
+that field is `null` rather than failing the whole request (graceful
+degradation).
 
 ---
 
@@ -163,11 +163,15 @@ against the replacement summary before returning.
 
 ---
 
-## What each person can do against this now
+## Where each part is implemented
 
-- **Reece** — build the table/map/forecast-box against this JSON using a mocked
-  response; no backend needed.
-- **Joseph** — implement the Open-Meteo fetch that fills the weather fields.
-- **Krithika** — design the prompt that turns the `route` table into `summary`.
-- **Ryan** — design review agents that read `route` + `summary` and emit
-  `validation` entries.
+| Part | Code |
+|------|------|
+| Endpoints | `backend/app/api/endpoints/weather.py` |
+| Input validation rules | `backend/app/models/waypoint.py` |
+| Output schemas | `backend/app/models/weather_data.py` |
+| Weather retrieval | `backend/app/services/open_meteo.py`, `backend/app/services/noaa.py` |
+| Summary mode selection and Gemini calls | `backend/app/services/summary_generator.py` |
+| Deterministic forecast discussion | `backend/app/agents/specialized/generator.py` |
+| Validation findings | `backend/app/agents/graph.py`, `backend/app/agents/specialized/critic.py` |
+| Frontend rendering | `frontend/src/App.js` |

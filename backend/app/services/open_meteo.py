@@ -1,4 +1,4 @@
-# Async parallel weather data fetching (Open-Meteo) — Owner: Joseph
+# Async parallel weather data fetching (Open-Meteo)
 """Fetches real weather for each waypoint from the Open-Meteo forecast API.
 
 Open-Meteo returns the requested units directly (°F, knots, inches), so no wind

@@ -1,4 +1,4 @@
-# LLM evaluation / hallucination audit tests — Owner: Ryan
+# LLM evaluation / hallucination audit tests
 from datetime import datetime, timezone
 from typing import Optional
 

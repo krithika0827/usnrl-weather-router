@@ -1,4 +1,4 @@
-# NOAA API client (fallback) — Owner: Joseph
+# NOAA API client (fallback)
 """Best-effort NOAA backup used when Open-Meteo fails for a waypoint.
 
 NOAA (api.weather.gov) covers the US only and takes two calls: /points/{lat,lon}

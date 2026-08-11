@@ -1,4 +1,4 @@
-# Frontend containerization — Owner: Reece DockerFile
+# Frontend containerization
 FROM node:20-alpine AS build
 
 WORKDIR /app
